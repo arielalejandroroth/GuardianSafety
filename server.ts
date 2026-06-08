@@ -73,7 +73,8 @@ async function startServer() {
   // Vite middleware for development
 
   if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-    const { createServer: createViteServer } = await import("vite");
+    const viteModule = "vite";
+    const { createServer: createViteServer } = await import(/* @vite-ignore */ viteModule);
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -104,9 +105,13 @@ async function startServer() {
 }
 
 // Check if this module was run directly
+const isCjsMain = typeof require !== 'undefined' && require.main === module;
+const isEsmMain = typeof process !== 'undefined' && process.argv && process.argv[1] && typeof import.meta !== 'undefined' && import.meta.url === `file://${process.argv[1]}`;
+
 if (
-  import.meta.url === `file://${process.argv[1]}` ||
-  process.argv[1]?.endsWith('server.cjs')
+  isCjsMain || 
+  isEsmMain ||
+  (typeof process !== 'undefined' && process.argv && process.argv[1]?.endsWith('server.cjs'))
 ) {
   startServer();
 } else if (process.env.NODE_ENV === "production" && !process.env.VERCEL) {
