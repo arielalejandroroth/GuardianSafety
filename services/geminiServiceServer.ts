@@ -4,7 +4,7 @@ import { AccidentReport, CauseTreeAnalysis, ArtClassification, Attachment, RiskI
 let aiInstance: GoogleGenAI | null = null;
 const getAI = (): GoogleGenAI => {
     if (!aiInstance) {
-        const API_KEY = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.VITE_GEMINI_API_KEY;
+        const API_KEY = import.meta.env.VTE_API_KEY || process.env.API_KEY || process.env.VITE_GEMINI_API_KEY;
         if (!API_KEY) {
             throw new Error("API_KEY environment variable not set. Gemini services will be disabled.");
         }
