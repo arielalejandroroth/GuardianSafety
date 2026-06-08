@@ -1,0 +1,164 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Information about a user",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Finding": {
+      "title": "Finding",
+      "description": "A safety finding",
+      "type": "object",
+      "properties": {
+        "plant": { "type": "string" },
+        "detectionDate": { "type": "string" },
+        "source": { "type": "string" },
+        "deviation": { "type": "string" },
+        "riskLevel": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["plant", "deviation", "riskLevel", "userId", "createdAt"]
+    },
+    "Observation": {
+      "title": "Observation",
+      "description": "Safety behavior observation",
+      "type": "object",
+      "properties": {
+        "plant": { "type": "string" },
+        "area": { "type": "string" },
+        "deviationObserved": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["plant", "userId", "createdAt"]
+    },
+    "Audit": {
+      "title": "Audit",
+      "description": "Internal audit form state",
+      "type": "object",
+      "properties": {
+        "plant": { "type": "string" },
+        "process": { "type": "string" },
+        "date": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["plant", "userId", "createdAt"]
+    },
+    "Accident": {
+      "title": "Accident",
+      "description": "Accident Report",
+      "type": "object",
+      "properties": {
+        "planta": { "type": "string" },
+        "date": { "type": "string" },
+        "tipo": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["planta", "tipo", "userId", "createdAt"]
+    },
+    "Dialogue": {
+      "title": "Dialogue",
+      "description": "Safety dialogue",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "date": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["type", "userId", "createdAt"]
+    },
+    "Qualification": {
+      "title": "Qualification",
+      "description": "Personnel qualification",
+      "type": "object",
+      "properties": {
+        "personnelName": { "type": "string" },
+        "equipment": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["personnelName", "userId", "createdAt"]
+    },
+    "ForkliftChecklist": {
+      "title": "Forklift Checklist",
+      "description": "Checklist for forklift operations",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "forkliftNumber": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["forkliftNumber", "userId", "createdAt"]
+    },
+    "RiskEvaluation": {
+      "title": "Risk Evaluation",
+      "description": "Risk Evaluation with generated map",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "sourceType": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["date", "userId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "UserProfile" },
+      "description": "User profiles"
+    },
+    "/users/{userId}/findings/{findingId}": {
+      "schema": { "$ref": "Finding" },
+      "description": "User findings"
+    },
+    "/users/{userId}/observations/{observationId}": {
+      "schema": { "$ref": "Observation" },
+      "description": "User observations"
+    },
+    "/users/{userId}/audits/{auditId}": {
+      "schema": { "$ref": "Audit" },
+      "description": "User audits"
+    },
+    "/users/{userId}/accidents/{accidentId}": {
+      "schema": { "$ref": "Accident" },
+      "description": "User accidents"
+    },
+    "/users/{userId}/dialogues/{dialogueId}": {
+      "schema": { "$ref": "Dialogue" },
+      "description": "User dialogues"
+    },
+    "/users/{userId}/qualifications/{qualificationId}": {
+      "schema": { "$ref": "Qualification" },
+      "description": "User qualifications"
+    },
+    "/users/{userId}/forkliftChecklists/{checklistId}": {
+      "schema": { "$ref": "ForkliftChecklist" },
+      "description": "User forklift checklists"
+    },
+    "/users/{userId}/riskEvaluations/{evaluationId}": {
+      "schema": { "$ref": "RiskEvaluation" },
+      "description": "User risk evaluations"
+    }
+  }
+}

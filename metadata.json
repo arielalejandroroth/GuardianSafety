@@ -1,0 +1,9 @@
+{
+  "name": "Roth of GuardianSafety",
+  "description": "A comprehensive web application for managing workplace safety observations, audits, and deviations. It empowers field users to digitally submit reports and provides administrators with a powerful dashboard and matrix to track and resolve safety issues.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "prompt": "",
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

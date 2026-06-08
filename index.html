@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SafetyGuard Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            colors: {
+              'brand-primary': '#00529B',
+              'brand-secondary': '#003F7A',
+              'brand-accent': '#FFC107',
+              'brand-light': '#F0F7FF',
+              'brand-dark': '#002A50',
+              'status-safe': '#10b981',
+              'status-warning': '#f59e0b',
+              'status-danger': '#ef4444',
+            },
+          }
+        }
+      }
+    </script>
+  <style>
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      .printable-area, .printable-area * {
+        visibility: visible;
+      }
+      .printable-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        transform: scale(1);
+      }
+      .no-print {
+          display: none !important;
+      }
+    }
+
+    /* Professional & Compact Graphical Cause Tree Diagram Styles */
+    .cause-tree-container-graphical {
+        display: flex;
+        gap: 1.5rem; /* Space between diagram and legend */
+        font-size: 14px;
+        padding: 1rem;
+        overflow-x: auto;
+        background-color: #f8fafc; /* slate-50 */
+    }
+
+    .tree-diagram-container {
+        position: relative; /* For SVG overlay */
+        padding-right: 2rem; /* Ensure space for connectors from root nodes */
+    }
+    
+    .tree-diagram-graphical {
+        display: flex;
+        flex-direction: row-reverse; /* Right-to-left tree flow */
+        align-items: center;
+        padding-left: 20px;
+    }
+
+    .tree-diagram-graphical > .tree-node-wrapper {
+        flex-shrink: 0;
+    }
+    
+    .tree-diagram-graphical > .children-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px; /* Reduced for compactness */
+        margin-right: 35px; /* Reduced for compactness */
+        position: relative;
+    }
+
+    .tree-node-wrapper {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .tree-node-graphical {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f8fafc; /* slate-50 */
+        border: 2px solid #00529B; /* brand-primary */
+        color: #00529B; /* brand-primary */
+        border-radius: 9999px;
+        width: 32px;
+        height: 32px;
+        font-weight: bold;
+        font-size: 14px;
+        flex-shrink: 0;
+    }
+    
+    .tree-legend {
+        flex-shrink: 0;
+        width: 350px;
+        border-left: 1px solid #e2e8f0; /* slate-200 */
+        padding-left: 1.5rem;
+        align-self: flex-start;
+    }
+
+    .tree-legend ol {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .tree-legend li {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 0.75rem;
+    }
+    .tree-legend .legend-number {
+        flex-shrink: 0;
+        width: 24px;
+        height: 24px;
+        background-color: #475569; /* slate-600 */
+        color: white;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 12px;
+        margin-right: 0.75rem;
+        margin-top: -2px;
+    }
+    .tree-legend .legend-text {
+        color: #334155; /* slate-700 */
+    }
+
+    .svg-connectors {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: visible;
+    }
+
+    .svg-connectors path {
+        fill: none;
+        stroke: #94a3b8; /* slate-400 */
+        stroke-width: 2px;
+    }
+
+    .svg-connectors .connector-y {
+        fill: #334155; /* slate-700 */
+        font-weight: bold;
+        font-size: 16px;
+        font-family: sans-serif;
+    }
+    
+    /* Styles for A4 Portrait PDF Generation */
+    .printable-pdf-area {
+        position: absolute;
+        left: -9999px;
+        top: auto;
+        width: 595pt; /* A4 width in points */
+        background: white;
+        color: black;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .printable-pdf-area .cause-tree-container-graphical {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        font-size: 10px; /* smaller base font */
+        overflow: visible; /* Important for canvas capture */
+        background-color: white;
+    }
+
+    .printable-pdf-area .children-container {
+        margin-right: 20px; /* Much smaller margin */
+        gap: 5px; /* Tighter vertical spacing */
+    }
+
+    .printable-pdf-area .tree-node-graphical {
+        width: 24px;
+        height: 24px;
+        font-size: 11px;
+        border-width: 1px;
+    }
+    
+    .printable-pdf-area .svg-connectors path {
+        stroke-width: 1px;
+    }
+
+    .printable-pdf-area .tree-legend {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid #e2e8f0; /* separator line */
+        padding-left: 0;
+        padding-top: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .printable-pdf-area .tree-legend h3 {
+        font-size: 14px;
+    }
+
+    .printable-pdf-area .tree-legend li {
+        margin-bottom: 0.5rem;
+    }
+
+    .printable-pdf-area .tree-legend .legend-number {
+        width: 20px;
+        height: 20px;
+        font-size: 10px;
+        margin-right: 0.5rem;
+    }
+
+    /* Zebra stripes for tables */
+    tbody tr:nth-child(odd) {
+      background-color: #f8fafc; /* slate-50 */
+    }
+    tbody tr:hover {
+      background-color: #f1f5f9; /* slate-100 */
+    }
+
+    /* Body Map Animations & Styles */
+    @keyframes pulse {
+      0% { transform: scale(0.95); }
+      70% { transform: scale(1.05); }
+      100% { transform: scale(0.95); }
+    }
+    
+    @keyframes subtle-slide-in {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .modal-content-animation {
+        animation: subtle-slide-in 0.3s ease-out forwards;
+    }
+
+    .preview-grid {
+      background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+  </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^18.2.0/",
+    "react": "https://esm.sh/react@^18.2.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.12.0",
+    "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
+    "recharts": "https://esm.sh/recharts@2.13.3",
+    "qrcode.react": "https://esm.sh/qrcode.react@^3.1.0",
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
+    "html2canvas": "https://esm.sh/html2canvas@1.4.1",
+    "xlsx": "https://esm.sh/xlsx@^0.18.5",
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.81.1"
+  }
+}
+</script>
+</head>
+  <body class="bg-slate-100">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

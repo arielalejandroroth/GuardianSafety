@@ -1,0 +1,5 @@
+# Configuración para Hostinger Node.js (Phusion Passenger)
+PassengerEnabled on
+PassengerAppType node
+PassengerStartupFile dist/server.cjs
+PassengerAppRoot /home/u123456789/domains/tudominio.com/public_html
