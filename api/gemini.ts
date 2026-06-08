@@ -1,13 +1,5 @@
 import * as geminiServiceServer from '../services/geminiServiceServer';
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
-  },
-};
-
 export default async function handler(req: any, res: any) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -28,7 +20,10 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { action, payload } = req.body;
+    const { action, payload } = req.body || {};
+    if (!action) {
+      return res.status(400).json({ error: "Missing action in request body" });
+    }
     
     switch(action) {
       case "suggestCorrection":
@@ -58,6 +53,6 @@ export default async function handler(req: any, res: any) {
     }
   } catch (error: any) {
     console.error(`Error in /api/gemini:`, error);
-    return res.status(400).json({ error: error.message || "Internal server error" });
+    return res.status(500).json({ error: error.message || "Internal server error" });
   }
 }
