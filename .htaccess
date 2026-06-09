@@ -1,4 +1,4 @@
 # Configuración para Hostinger Node.js (Phusion Passenger)
 PassengerEnabled on
 PassengerAppType node
-PassengerStartupFile dist/server.cjs
+PassengerStartupFile app.cjs
