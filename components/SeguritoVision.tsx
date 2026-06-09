@@ -40,13 +40,21 @@ const SeguritoVision: React.FC<SeguritoVisionProps> = ({ onSave, onNavigate }) =
             return;
         }
         
+        // Vercel / Hostinger / WAF protection: prevent payloads > 4MB
+        const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+        if (!file.type.startsWith('image/') && file.size > MAX_FILE_SIZE) {
+            alert('El archivo seleccionado (video/pdf) es demasiado grande. Para asegurar el funcionamiento, el tamaño máximo permitido es de 4MB. Si es imagen, será comprimida automáticamente.');
+            event.target.value = ''; // Reset input
+            return;
+        }
+        
         const reader = new FileReader();
         reader.onload = () => {
             if (file.type.startsWith('image/')) {
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const maxDimension = 1080;
+                    const maxDimension = 800;
                     let width = img.width;
                     let height = img.height;
                     
@@ -65,7 +73,7 @@ const SeguritoVision: React.FC<SeguritoVisionProps> = ({ onSave, onNavigate }) =
                     const ctx = canvas.getContext('2d');
                     ctx?.drawImage(img, 0, 0, width, height);
                     
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
                     
                     setMedia({
                         name: file.name,

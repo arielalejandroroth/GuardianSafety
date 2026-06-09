@@ -8,6 +8,11 @@ const app = express();
 // Export the app instance for Serverless environments (like Vercel)
 export default app;
 
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.url}`);
+  next();
+});
+
 // Attach API routes synchronously so serverless functions can use them immediately
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 

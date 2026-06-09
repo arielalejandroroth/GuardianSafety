@@ -20,7 +20,7 @@ const getAI = (): GoogleGenAI => {
 
 const getDisabledApiError = () => "Error: La clave de API no está configurada. Las funciones de IA están deshabilitadas.";
 
-const executeWithRetry = async <T>(operation: () => Promise<T>, maxRetries: number = 3, initialDelayMs: number = 2000): Promise<T> => {
+const executeWithRetry = async <T>(operation: () => Promise<T>, maxRetries: number = 6, initialDelayMs: number = 2000): Promise<T> => {
     let retries = 0;
     while (true) {
         try {
@@ -32,7 +32,7 @@ const executeWithRetry = async <T>(operation: () => Promise<T>, maxRetries: numb
             if (isRetryable && retries < maxRetries) {
                 retries++;
                 const delay = initialDelayMs * Math.pow(2, retries - 1); // Exponential backoff: 2s, 4s, 8s
-                console.warn(`Gemini API error (retryable). Retrying ${retries}/${maxRetries} in ${delay}ms...`, errMsg);
+                console.log(`Gemini API error (retryable). Retrying ${retries}/${maxRetries} in ${delay}ms...`, errMsg);
                 await new Promise(resolve => setTimeout(resolve, delay));
             } else {
                 throw error;
@@ -358,7 +358,7 @@ export const editImage = async (base64Image: string, mimeType: string, prompt: s
 
     try {
         const response = await executeWithRetry(() => getAI().models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: 'gemini-2.5-flash',
             contents: {
                 parts: [
                     {
@@ -425,7 +425,7 @@ export const generateRiskMap = async (base64Source: string, mimeType: string, se
 
     try {
         const response = await executeWithRetry(() => getAI().models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: 'gemini-2.5-flash',
             contents: {
                 parts: [
                     {
@@ -590,7 +590,7 @@ export const chatWithSegurino = async (question: string, appData: any): Promise<
 export const generateImage = async (prompt: string, aspectRatio: string): Promise<string> => {
     try {
         const response = await executeWithRetry(() => getAI().models.generateImages({
-            model: 'imagen-4.0-generate-001',
+            model: 'imagen-3.0-generate-001',
             prompt: prompt,
             config: {
                 numberOfImages: 1,

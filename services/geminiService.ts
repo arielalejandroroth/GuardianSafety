@@ -23,7 +23,7 @@ const callApi = async (action: string, payload: any) => {
         
         if (!contentType || !contentType.includes("application/json")) {
             console.error("No JSON response:", text.substring(0, 200));
-            throw new Error(`El servidor Express (Vercel/Hostinger) devolvió una respuesta no válida (HTML). Código de estado: ${response.status}. Verifique que el backend remoto esté configurado y activo.`);
+            throw new Error(`El servidor Express devolvió una respuesta HTML (Código ${response.status}). Esto suele ocurrir si la app se alojó en un hosting estático sin Node.js, o si un Firewall/WAF (ej: Hostinger) bloqueó la imagen por su tamaño.`);
         }
 
         try {

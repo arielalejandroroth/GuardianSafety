@@ -27,9 +27,16 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, multiple = true,
     if (!files) return;
 
     const newAttachmentPromises: Promise<Attachment>[] = [];
+    const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      
+      if (!file.type.startsWith('image/') && file.size > MAX_FILE_SIZE) {
+          alert(`El archivo ${file.name} es demasiado grande. Seleccione un documento de menos de 4MB.`);
+          continue;
+      }
+      
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         newAttachmentPromises.push(
@@ -38,7 +45,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, multiple = true,
               const img = new Image();
               img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const maxDimension = 1080;
+                const maxDimension = 800;
                 let width = img.width;
                 let height = img.height;
                 
@@ -57,7 +64,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, multiple = true,
                 const ctx = canvas.getContext('2d');
                 ctx?.drawImage(img, 0, 0, width, height);
                 
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
                 resolve({
                   name: file.name,
                   type: 'image/jpeg',
