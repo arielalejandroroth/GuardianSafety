@@ -11,7 +11,7 @@ interface AppData {
 
 const callApi = async (action: string, payload: any) => {
     try {
-        const response = await fetch("/backend/gemini", {
+        const response = await fetch("/api/gemini", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action, payload })
@@ -38,7 +38,7 @@ const callApi = async (action: string, payload: any) => {
         }
         return data.result;
     } catch (error) {
-        console.error("Network or parsing error calling /backend/gemini:", error);
+        console.error("Network or parsing error calling /api/gemini:", error);
         throw error;
     }
 };

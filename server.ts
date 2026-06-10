@@ -21,7 +21,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Shared generic endpoint for Gemini calls
-app.post("/backend/gemini", async (req, res) => {
+app.post("/api/gemini", async (req, res) => {
   try {
     const { action, payload } = req.body;
     

@@ -2,11 +2,11 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/backend/(.*)",
+      "source": "/api/(.*)",
       "destination": "/api/index.cjs"
     },
     {
-      "source": "/((?!api/|backend/|.*\\..*).*)$",
+      "source": "/((?!api/|.*\\..*).*)$",
       "destination": "/index.html"
     }
   ]
