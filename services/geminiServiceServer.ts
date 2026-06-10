@@ -144,7 +144,7 @@ export const generateRiskAssessment = async (mediaArray: any[], userPrompt: stri
     let parts: any[] = [];
     if (mediaArray && mediaArray.length > 0) {
         mediaArray.forEach(media => {
-            if (media.type && media.data && media.type.startsWith('image/')) {
+            if (media.type && media.data && (media.type.startsWith('image/') || media.type.startsWith('video/'))) {
                 parts.push({ inlineData: { mimeType: media.type, data: media.url ? media.url.split(',')[1] : media.data } });
             }
         });

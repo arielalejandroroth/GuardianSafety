@@ -40,10 +40,10 @@ const SeguritoVision: React.FC<SeguritoVisionProps> = ({ onSave, onNavigate }) =
             return;
         }
         
-        // Vercel / Hostinger / WAF protection: prevent payloads > 45MB
-        const MAX_FILE_SIZE = 45 * 1024 * 1024; // 45MB
+        // Vercel / Hostinger / WAF protection: prevent payloads > 4MB (Vercel has a hard 4.5MB limit)
+        const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
         if (!file.type.startsWith('image/') && file.size > MAX_FILE_SIZE) {
-            alert('El archivo seleccionado (video/pdf) es demasiado grande. Para asegurar el funcionamiento, el tamaño máximo permitido es de 45MB. Si es imagen, será comprimida automáticamente.');
+            alert('El archivo seleccionado (video) es demasiado grande. Para evitar bloqueos del servidor (Vercel/Hostinger), el límite es de 4MB.');
             event.target.value = ''; // Reset input
             return;
         }
