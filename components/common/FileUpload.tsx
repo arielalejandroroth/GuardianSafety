@@ -27,13 +27,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, multiple = true,
     if (!files) return;
 
     const newAttachmentPromises: Promise<Attachment>[] = [];
-    const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+    const MAX_FILE_SIZE = 45 * 1024 * 1024; // 45MB
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       
       if (!file.type.startsWith('image/') && file.size > MAX_FILE_SIZE) {
-          alert(`El archivo ${file.name} es demasiado grande. Seleccione un documento de menos de 4MB.`);
+          alert(`El archivo ${file.name} es demasiado grande. Seleccione un documento de menos de 45MB.`);
           continue;
       }
       
