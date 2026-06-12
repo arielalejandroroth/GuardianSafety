@@ -1,5 +1,8 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { AccidentReport, CauseTreeAnalysis, ArtClassification, Attachment, RiskItem, RiskEvaluation, SafeWorkProcedure, Finding, Qualification, DialogueFormState, ObservationFormState, ForkliftChecklist } from '../types';
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 let aiInstance: GoogleGenAI | null = null;
 const getAI = (): GoogleGenAI => {
@@ -143,11 +146,35 @@ export const generateRiskAssessment = async (mediaArray: any[], userPrompt: stri
 
     let parts: any[] = [];
     if (mediaArray && mediaArray.length > 0) {
-        mediaArray.forEach(media => {
-            if (media.type && media.data && (media.type.startsWith('image/') || media.type.startsWith('video/'))) {
-                parts.push({ inlineData: { mimeType: media.type, data: media.url ? media.url.split(',')[1] : media.data } });
+        for (const media of mediaArray) {
+            if (media.type && media.data) {
+                if (media.type.startsWith('video/')) {
+                    // Video requires File API. Write to temp file.
+                    const tempFilePath = path.join(os.tmpdir(), `upload-${Date.now()}.mp4`);
+                    // data is base64
+                    const base64Data = media.url ? media.url.split(',')[1] : media.data;
+                    fs.writeFileSync(tempFilePath, Buffer.from(base64Data, 'base64'));
+                    try {
+                        const uploadResult = await getAI().files.upload({ file: tempFilePath, mimeType: media.type });
+                        
+                        let fileState = await getAI().files.get({ name: uploadResult.name });
+                        while (fileState.state === 'PROCESSING') {
+                            await new Promise(r => setTimeout(r, 2000));
+                            fileState = await getAI().files.get({ name: uploadResult.name });
+                        }
+                        if (fileState.state === 'FAILED') {
+                            throw new Error("El procesamiento del video falló en la API de IA.");
+                        }
+
+                        parts.push({ fileData: { fileUri: uploadResult.uri, mimeType: uploadResult.mimeType } });
+                    } finally {
+                        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+                    }
+                } else if (media.type.startsWith('image/')) {
+                    parts.push({ inlineData: { mimeType: media.type, data: media.url ? media.url.split(',')[1] : media.data } });
+                }
             }
-        });
+        }
     }
     parts.push({ text: userPrompt || "Evalúa esta situación" });
 

@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import path from "path";
+import fs from "fs";
+import os from "os";
 import * as geminiServiceServer from "./services/geminiServiceServer";
 
 const app = express();

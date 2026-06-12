@@ -23,7 +23,7 @@ const callApi = async (action: string, payload: any) => {
         
         if (!contentType || !contentType.includes("application/json")) {
             console.error("No JSON response:", text.substring(0, 200));
-            throw new Error(`El servidor Express devolvió una respuesta HTML (Código ${response.status}). Esto suele ocurrir si la app se alojó en un hosting estático sin Node.js, o si un Firewall/WAF (ej: Hostinger/Cloudflare/Vercel) bloqueó la imagen/video por exceder el tamaño máximo permitido por el servidor web.`);
+            throw new Error(`El servidor devolvió una respuesta en HTML en lugar de JSON (Código ${response.status}). El archivo de video/imagen es demasiado grande y fue bloqueado por el cortafuegos (WAF/Proxy) del servidor antes de poder analizarlo. Por favor, recorte o reduzca la calidad del video e intente nuevamente.`);
         }
 
         try {

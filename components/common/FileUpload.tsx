@@ -27,14 +27,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, multiple = true,
     if (!files) return;
 
     const newAttachmentPromises: Promise<Attachment>[] = [];
-    const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+    const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       
-      // Vercel / Hostinger WAF payload limit
-      if (!file.type.startsWith('image/') && file.size > MAX_FILE_SIZE) {
-          alert(`El archivo ${file.name} es demasiado grande. El servidor remoto (Vercel/Hostinger) solo recibe hasta 4MB por archivo (videos o pdf).`);
+      if (file.size > MAX_FILE_SIZE) {
+          alert(`El archivo ${file.name} es demasiado grande. El límite es de 20MB.`);
           continue;
       }
       

@@ -40,10 +40,10 @@ const SeguritoVision: React.FC<SeguritoVisionProps> = ({ onSave, onNavigate }) =
             return;
         }
         
-        // Vercel / Hostinger / WAF protection: prevent payloads > 4MB (Vercel has a hard 4.5MB limit)
-        const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
-        if (!file.type.startsWith('image/') && file.size > MAX_FILE_SIZE) {
-            alert('El archivo seleccionado (video) es demasiado grande. Para evitar bloqueos del servidor (Vercel/Hostinger), el límite es de 4MB.');
+        // 20MB max file size to prevent 413 Payload Too Large (Cloud Run limits at 32MB, Base64 adds 33% overhead)
+        const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+        if (file.size > MAX_FILE_SIZE) {
+            alert('El archivo seleccionado es demasiado grande. Por favor limite el tamaño a 20MB (ej. videos de ~10 segundos).');
             event.target.value = ''; // Reset input
             return;
         }
