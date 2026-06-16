@@ -11,34 +11,51 @@ interface AppData {
 
 const callApi = async (action: string, payload: any) => {
     try {
-        if (payload && payload.media && payload.media.length > 0) {
-            for (let i = 0; i < payload.media.length; i++) {
-                const mediaItem = payload.media[i];
-                if (mediaItem.data && mediaItem.data.length > 700000) {
-                    const base64Data = mediaItem.data;
-                    const CHUNK_SIZE = 700000;
-                    const sessionId = Date.now().toString() + "-" + i;
-                    const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
+        const payloadCopy = JSON.parse(JSON.stringify(payload));
+        
+        let filesToChunk: any[] = [];
+        if (payloadCopy && payloadCopy.media && payloadCopy.media.length > 0) {
+            filesToChunk = payloadCopy.media;
+        }
+        
+        if (payloadCopy && payloadCopy.base64Source) {
+            filesToChunk.push(payloadCopy); // payloadCopy itself holds base64Source
+        }
 
-                    for (let c = 0; c < totalChunks; c++) {
-                        const chunkData = base64Data.slice(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE);
-                        const uploadRes = await fetch("/api/upload-chunk", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ sessionId, chunkIndex: c, totalChunks, chunkData })
-                        });
-                        
-                        if (!uploadRes.ok) {
-                            const errText = await uploadRes.text();
-                            console.error("Chunk upload failed:", errText);
-                            throw new Error("Fallo al subir archivo. El servidor rechazó la conexión parcial: " + uploadRes.status);
-                        }
-                        
-                        if (c === totalChunks - 1) {
-                            const result = await uploadRes.json();
-                            mediaItem.tempFilePath = result.tempPath;
-                            mediaItem.data = ""; // Clear data so we don't send it via Vercel payload limit
-                        }
+        if (payloadCopy && payloadCopy.base64Image) {
+            filesToChunk.push(payloadCopy); // payloadCopy itself holds base64Image
+        }
+
+        for (let i = 0; i < filesToChunk.length; i++) {
+            const mediaItem = filesToChunk[i];
+            const dataToChunk = mediaItem.data || mediaItem.base64Source || mediaItem.base64Image;
+            
+            if (dataToChunk && dataToChunk.length > 100000) {
+                const base64Data = dataToChunk;
+                const CHUNK_SIZE = 100000;
+                const sessionId = Date.now().toString() + "-" + i + "-" + Math.random().toString(36).substring(7);
+                const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
+
+                for (let c = 0; c < totalChunks; c++) {
+                    const chunkData = base64Data.slice(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE);
+                    const uploadRes = await fetch("/api/upload-chunk", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sessionId, chunkIndex: c, totalChunks, chunkData })
+                    });
+                    
+                    if (!uploadRes.ok) {
+                        const errText = await uploadRes.text();
+                        console.error("Chunk upload failed:", errText);
+                        throw new Error("Fallo al subir archivo. El servidor rechazó la conexión parcial: " + uploadRes.status);
+                    }
+                    
+                    if (c === totalChunks - 1) {
+                        const result = await uploadRes.json();
+                        mediaItem.tempFilePath = result.tempPath;
+                        if (mediaItem.data) mediaItem.data = "";
+                        if (mediaItem.base64Source) mediaItem.base64Source = "";
+                        if (mediaItem.base64Image) mediaItem.base64Image = "";
                     }
                 }
             }
@@ -47,7 +64,7 @@ const callApi = async (action: string, payload: any) => {
         const response = await fetch("/api/gemini", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action, payload })
+            body: JSON.stringify({ action, payload: payloadCopy })
         });
         
         let data;
@@ -56,7 +73,7 @@ const callApi = async (action: string, payload: any) => {
         
         if (!contentType || !contentType.includes("application/json")) {
             console.error("No JSON response:", text.substring(0, 200));
-            throw new Error(`El servidor devolvió una respuesta en HTML en lugar de JSON (Código ${response.status}). El archivo de video/imagen es demasiado grande y fue bloqueado por el cortafuegos (WAF/Proxy) del servidor antes de poder analizarlo. Por favor, recorte o reduzca la calidad del video e intente nuevamente.`);
+            throw new Error(`El servidor devolvió una respuesta en HTML en lugar de JSON (Código ${response.status}). Posible proxy/timeout cortó la conexión.`);
         }
 
         try {

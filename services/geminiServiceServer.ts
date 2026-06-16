@@ -442,9 +442,7 @@ export const editImage = async (base64Image: string, mimeType: string, prompt: s
     }
 };
 
-export const generateRiskMap = async (base64Source: string, mimeType: string, sector: string, prompt: string): Promise<string> => {
-    
-
+export const generateRiskMap = async (base64Source: string, mimeType: string, sector: string, prompt: string, tempFilePath?: string): Promise<string> => {
     const systemInstruction = `
     Eres un Ingeniero de Seguridad e Higiene Ocupacional Senior y un Diseñador Gráfico experto especializado en cartografía industrial.
     Tu tarea es generar un MAPA DE RIESGOS profesional y detallado para el sector: ${sector}.
@@ -464,16 +462,30 @@ export const generateRiskMap = async (base64Source: string, mimeType: string, se
     `;
 
     try {
+        let imagePart: any;
+        let needsCleanup = false;
+
+        if (tempFilePath) {
+            const uploadResult = await executeWithRetry(() => getAI().files.upload({ file: tempFilePath, config: { mimeType } }));
+            let fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
+            let attempts = 0;
+            while (fileState.state !== 'ACTIVE' && attempts < 30) {
+                if (fileState.state === 'FAILED') throw new Error("File processing failed.");
+                await new Promise(r => setTimeout(r, 2000));
+                fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
+                attempts++;
+            }
+            imagePart = { fileData: { fileUri: uploadResult.uri, mimeType: uploadResult.mimeType } };
+            needsCleanup = true;
+        } else {
+            imagePart = { inlineData: { mimeType, data: base64Source } };
+        }
+
         const response = await executeWithRetry(() => getAI().models.generateContent({
             model: 'gemini-2.5-flash',
             contents: {
                 parts: [
-                    {
-                        inlineData: {
-                            mimeType: mimeType,
-                            data: base64Source
-                        }
-                    },
+                    imagePart,
                     {
                         text: `Generar mapa de riesgos para el sector ${sector}. Instrucciones específicas: ${prompt}`
                     }
@@ -484,6 +496,8 @@ export const generateRiskMap = async (base64Source: string, mimeType: string, se
                 temperature: 0.4
             }
         }));
+
+        if (needsCleanup && fs.existsSync(tempFilePath!)) fs.unlinkSync(tempFilePath!);
 
         let resultImage = '';
         if (response.candidates?.[0]?.content?.parts) {
@@ -502,6 +516,7 @@ export const generateRiskMap = async (base64Source: string, mimeType: string, se
         }
     } catch (error) {
         console.error(error);
+        if (tempFilePath && fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
         throw new Error("Error al generar mapa de riesgos.");
     }
 };
@@ -510,7 +525,8 @@ export const analyzeEvacuationRoutes = async (
     base64Source: string, 
     mimeType: string, 
     startPoint: { x: number, y: number }, 
-    endPoint: { x: number, y: number }
+    endPoint: { x: number, y: number },
+    tempFilePath?: string
 ): Promise<{ primary: { x: number, y: number }[], alternative: { x: number, y: number }[] }> => {
     const systemInstruction = `
     Eres un experto en Seguridad Industrial y Prevención de Incendios.
@@ -563,16 +579,30 @@ export const analyzeEvacuationRoutes = async (
     };
 
     try {
+        let imagePart: any;
+        let needsCleanup = false;
+
+        if (tempFilePath) {
+            const uploadResult = await executeWithRetry(() => getAI().files.upload({ file: tempFilePath, config: { mimeType } }));
+            let fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
+            let attempts = 0;
+            while (fileState.state !== 'ACTIVE' && attempts < 30) {
+                if (fileState.state === 'FAILED') throw new Error("File processing failed.");
+                await new Promise(r => setTimeout(r, 2000));
+                fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
+                attempts++;
+            }
+            imagePart = { fileData: { fileUri: uploadResult.uri, mimeType: uploadResult.mimeType } };
+            needsCleanup = true;
+        } else {
+            imagePart = { inlineData: { mimeType, data: base64Source } };
+        }
+
         const response = await executeWithRetry(() => getAI().models.generateContent({
             model: 'gemini-2.5-flash',
             contents: {
                 parts: [
-                    {
-                        inlineData: {
-                            mimeType: mimeType,
-                            data: base64Source
-                        }
-                    },
+                    imagePart,
                     {
                         text: `Analizar rutas desde (${startPoint.x}, ${startPoint.y}) hasta (${endPoint.x}, ${endPoint.y}).`
                     }
@@ -586,9 +616,12 @@ export const analyzeEvacuationRoutes = async (
             }
         }));
 
+        if (needsCleanup && fs.existsSync(tempFilePath!)) fs.unlinkSync(tempFilePath!);
+
         const result = JSON.parse(response.text);
         return result;
     } catch (error) {
+        if (tempFilePath && fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
         handleGeminiError(error, "No se pudo analizar las rutas de evacuación. Intente marcar los puntos más claramente.", "Error analyzing evacuation routes:");
     }
 };

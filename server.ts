@@ -83,10 +83,10 @@ app.post("/api/gemini", async (req, res) => {
         res.json({ result: await geminiServiceServer.editImage(payload.base64Image, payload.mimeType, payload.prompt) });
         break;
       case "generateRiskMap":
-        res.json({ result: await geminiServiceServer.generateRiskMap(payload.base64Source, payload.mimeType, payload.sector, payload.prompt) });
+        res.json({ result: await geminiServiceServer.generateRiskMap(payload.base64Source, payload.mimeType, payload.sector, payload.prompt, payload.tempFilePath) });
         break;
       case "analyzeEvacuationRoutes":
-        res.json({ result: await geminiServiceServer.analyzeEvacuationRoutes(payload.base64Source, payload.mimeType, payload.startPoint, payload.endPoint) });
+        res.json({ result: await geminiServiceServer.analyzeEvacuationRoutes(payload.base64Source, payload.mimeType, payload.startPoint, payload.endPoint, payload.tempFilePath) });
         break;
       default:
         res.status(400).json({ error: "Unknown action" });
