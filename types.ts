@@ -67,6 +67,7 @@ export interface Attachment {
     name: string;
     type: string;
     data: string; // base64 encoded
+    tempFilePath?: string;
 }
 
 export interface RiskMarker {

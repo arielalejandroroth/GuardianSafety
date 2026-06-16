@@ -11,6 +11,39 @@ interface AppData {
 
 const callApi = async (action: string, payload: any) => {
     try {
+        if (payload && payload.media && payload.media.length > 0) {
+            for (let i = 0; i < payload.media.length; i++) {
+                const mediaItem = payload.media[i];
+                if (mediaItem.data && mediaItem.data.length > 700000) {
+                    const base64Data = mediaItem.data;
+                    const CHUNK_SIZE = 700000;
+                    const sessionId = Date.now().toString() + "-" + i;
+                    const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
+
+                    for (let c = 0; c < totalChunks; c++) {
+                        const chunkData = base64Data.slice(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE);
+                        const uploadRes = await fetch("/api/upload-chunk", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ sessionId, chunkIndex: c, totalChunks, chunkData })
+                        });
+                        
+                        if (!uploadRes.ok) {
+                            const errText = await uploadRes.text();
+                            console.error("Chunk upload failed:", errText);
+                            throw new Error("Fallo al subir archivo. El servidor rechazó la conexión parcial: " + uploadRes.status);
+                        }
+                        
+                        if (c === totalChunks - 1) {
+                            const result = await uploadRes.json();
+                            mediaItem.tempFilePath = result.tempPath;
+                            mediaItem.data = ""; // Clear data so we don't send it via Vercel payload limit
+                        }
+                    }
+                }
+            }
+        }
+
         const response = await fetch("/api/gemini", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

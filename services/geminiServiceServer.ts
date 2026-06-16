@@ -35,7 +35,7 @@ const executeWithRetry = async <T>(operation: () => Promise<T>, maxRetries: numb
             if (isRetryable && retries < maxRetries) {
                 retries++;
                 const delay = initialDelayMs * Math.pow(2, retries - 1); // Exponential backoff: 2s, 4s, 8s
-                console.log(`Gemini API error (retryable). Retrying ${retries}/${maxRetries} in ${delay}ms...`, errMsg);
+                console.warn(`Gemini API high demand or rate limit. Retrying ${retries}/${maxRetries} in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             } else {
                 throw error;
@@ -147,32 +147,45 @@ export const generateRiskAssessment = async (mediaArray: any[], userPrompt: stri
     let parts: any[] = [];
     if (mediaArray && mediaArray.length > 0) {
         for (const media of mediaArray) {
-            if (media.type && media.data) {
-                if (media.type.startsWith('video/')) {
-                    // Video requires File API. Write to temp file.
-                    const tempFilePath = path.join(os.tmpdir(), `upload-${Date.now()}.mp4`);
-                    // data is base64
-                    const base64Data = media.url ? media.url.split(',')[1] : media.data;
-                    fs.writeFileSync(tempFilePath, Buffer.from(base64Data, 'base64'));
-                    try {
-                        const uploadResult = await getAI().files.upload({ file: tempFilePath, mimeType: media.type });
-                        
-                        let fileState = await getAI().files.get({ name: uploadResult.name });
-                        while (fileState.state === 'PROCESSING') {
-                            await new Promise(r => setTimeout(r, 2000));
-                            fileState = await getAI().files.get({ name: uploadResult.name });
-                        }
+            let tempFilePathToUpload = media.tempFilePath;
+            let needsCleanup = false;
+            
+            if (!tempFilePathToUpload && media.type && media.data && media.type.startsWith('video/')) {
+                // Video requires File API. Write to temp file.
+                tempFilePathToUpload = path.join(os.tmpdir(), `upload-${Date.now()}.mp4`);
+                // data is base64
+                const base64Data = media.url ? media.url.split(',')[1] : media.data;
+                fs.writeFileSync(tempFilePathToUpload, Buffer.from(base64Data, 'base64'));
+                needsCleanup = true;
+            }
+
+            if (tempFilePathToUpload) {
+                try {
+                    const uploadResult = await executeWithRetry(() => getAI().files.upload({ file: tempFilePathToUpload, config: { mimeType: media.type || 'video/mp4' } }));
+                    
+                    let fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
+                    let attempts = 0;
+                    while (fileState.state !== 'ACTIVE' && attempts < 30) {
                         if (fileState.state === 'FAILED') {
                             throw new Error("El procesamiento del video falló en la API de IA.");
                         }
-
-                        parts.push({ fileData: { fileUri: uploadResult.uri, mimeType: uploadResult.mimeType } });
-                    } finally {
-                        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+                        await new Promise(r => setTimeout(r, 2000));
+                        fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
+                        attempts++;
                     }
-                } else if (media.type.startsWith('image/')) {
-                    parts.push({ inlineData: { mimeType: media.type, data: media.url ? media.url.split(',')[1] : media.data } });
+                    
+                    if (fileState.state !== 'ACTIVE') {
+                            throw new Error(`El archivo de video aún no está listo. Estado actual: ${fileState.state}`);
+                    }
+
+                    parts.push({ fileData: { fileUri: uploadResult.uri, mimeType: uploadResult.mimeType } });
+                } finally {
+                    if (needsCleanup && fs.existsSync(tempFilePathToUpload)) fs.unlinkSync(tempFilePathToUpload);
+                    // Also cleanup the chunked file if it was uploaded from client tempFilePath
+                    if (media.tempFilePath && fs.existsSync(media.tempFilePath)) fs.unlinkSync(media.tempFilePath);
                 }
+            } else if (media.type && media.type.startsWith('image/')) {
+                parts.push({ inlineData: { mimeType: media.type, data: media.url ? media.url.split(',')[1] : media.data } });
             }
         }
     }

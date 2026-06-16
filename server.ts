@@ -22,6 +22,33 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+app.post("/api/upload-chunk", (req, res) => {
+  try {
+    const { sessionId, chunkIndex, totalChunks, chunkData } = req.body;
+    if (!sessionId || typeof chunkIndex !== 'number' || typeof totalChunks !== 'number' || !chunkData) {
+      return res.status(400).json({ error: "Missing required chunk parameters" });
+    }
+    const chunkBuffer = Buffer.from(chunkData, 'base64');
+    
+    const tempPath = path.join(os.tmpdir(), `upload-${sessionId}`);
+    
+    if (chunkIndex === 0 && fs.existsSync(tempPath)) {
+      fs.unlinkSync(tempPath);
+    }
+    
+    fs.appendFileSync(tempPath, chunkBuffer);
+    
+    if (chunkIndex === totalChunks - 1) {
+      res.json({ success: true, tempPath, message: "Upload complete" });
+    } else {
+      res.json({ success: true, message: "Chunk received" });
+    }
+  } catch (error: any) {
+    console.error("Chunk error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Shared generic endpoint for Gemini calls
 app.post("/api/gemini", async (req, res) => {
   try {
