@@ -14,8 +14,8 @@ const callApi = async (action: string, payload: any) => {
         const payloadCopy = JSON.parse(JSON.stringify(payload));
         
         let filesToChunk: any[] = [];
-        if (payloadCopy && payloadCopy.media && payloadCopy.media.length > 0) {
-            filesToChunk = payloadCopy.media;
+        if (payloadCopy && payloadCopy.media && Array.isArray(payloadCopy.media) && payloadCopy.media.length > 0) {
+            filesToChunk = [...payloadCopy.media];
         }
         
         if (payloadCopy && payloadCopy.base64Source) {
@@ -83,7 +83,7 @@ const callApi = async (action: string, payload: any) => {
             throw new Error("Error interno al decodificar la respuesta del servidor.");
         }
 
-        if (!response.ok) {
+        if (!response.ok || data.error) {
             throw new Error(data.error || "La API falló.");
         }
         return data.result;

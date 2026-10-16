@@ -1,7 +1,29 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
+    // Centralized shared company database (incidents, investigations, audits, checklists)
+    // Accessible by the web app for real-time sync across authorized workers and admins
+    match /companyData/{workspaceId} {
+      allow read, write: if true;
+    }
+
+    // Role-based access control and user permission directory
+    match /authorizedUsers/{userId} {
+      allow read, write: if true;
+    }
+
+    // Admins registry
+    match /admins/{userId} {
+      allow read, write: if true;
+    }
+
+    // Individual appData state
+    match /users/{userId}/appData/state {
+      allow read, write: if true;
+    }
+
+    // Connection test document
+    match /test/{document=**} {
       allow read, write: if true;
     }
   }

@@ -51,49 +51,63 @@ app.post("/api/upload-chunk", (req, res) => {
 
 // Shared generic endpoint for Gemini calls
 app.post("/api/gemini", async (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  // keep connection alive by sending whitespace
+  const keepAlive = setInterval(() => {
+    res.write(" ");
+  }, 10000);
+
   try {
     const { action, payload } = req.body;
+    let result;
     
     switch(action) {
       case "suggestCorrection":
-        res.json({ result: await geminiServiceServer.suggestCorrection(payload.deviationText) });
+        result = await geminiServiceServer.suggestCorrection(payload.deviationText);
         break;
       case "generateRiskAssessment":
-        res.json({ result: await geminiServiceServer.generateRiskAssessment(payload.media, payload.userPrompt) });
+        result = await geminiServiceServer.generateRiskAssessment(payload.media, payload.userPrompt);
         break;
       case "generateSafeWorkProcedure":
-        res.json({ result: await geminiServiceServer.generateSafeWorkProcedure(payload.evaluation, payload.nextCode) });
+        result = await geminiServiceServer.generateSafeWorkProcedure(payload.evaluation, payload.nextCode);
         break;
       case "generateCauseTreeAnalysis":
-        res.json({ result: await geminiServiceServer.generateCauseTreeAnalysis(payload.accident) });
+        result = await geminiServiceServer.generateCauseTreeAnalysis(payload.accident);
         break;
       case "getEPPAdvice":
-        res.json({ result: await geminiServiceServer.getEPPAdvice(payload.ppeItems) });
+        result = await geminiServiceServer.getEPPAdvice(payload.ppeItems);
         break;
       case "analyzeAccidentData":
-        res.json({ result: await geminiServiceServer.analyzeAccidentData(payload.question, payload.accidents) });
+        result = await geminiServiceServer.analyzeAccidentData(payload.question, payload.accidents);
         break;
       case "chatWithSegurino":
-        res.json({ result: await geminiServiceServer.chatWithSegurino(payload.question, payload.appData) });
+        result = await geminiServiceServer.chatWithSegurino(payload.question, payload.appData);
         break;
       case "generateImage":
-        res.json({ result: await geminiServiceServer.generateImage(payload.prompt, payload.aspectRatio) });
+        result = await geminiServiceServer.generateImage(payload.prompt, payload.aspectRatio);
         break;
       case "editImage":
-        res.json({ result: await geminiServiceServer.editImage(payload.base64Image, payload.mimeType, payload.prompt) });
+        result = await geminiServiceServer.editImage(payload.base64Image, payload.mimeType, payload.prompt, payload.tempFilePath);
         break;
       case "generateRiskMap":
-        res.json({ result: await geminiServiceServer.generateRiskMap(payload.base64Source, payload.mimeType, payload.sector, payload.prompt, payload.tempFilePath) });
+        result = await geminiServiceServer.generateRiskMap(payload.base64Source, payload.mimeType, payload.sector, payload.prompt, payload.tempFilePath);
         break;
       case "analyzeEvacuationRoutes":
-        res.json({ result: await geminiServiceServer.analyzeEvacuationRoutes(payload.base64Source, payload.mimeType, payload.startPoint, payload.endPoint, payload.tempFilePath) });
+        result = await geminiServiceServer.analyzeEvacuationRoutes(payload.base64Source, payload.mimeType, payload.startPoint, payload.endPoint, payload.tempFilePath);
         break;
       default:
-        res.status(400).json({ error: "Unknown action" });
+        clearInterval(keepAlive);
+        return res.status(400).json({ error: "Unknown action" });
     }
+    
+    clearInterval(keepAlive);
+    res.write(JSON.stringify({ result }));
+    res.end();
   } catch (error: any) {
+    clearInterval(keepAlive);
     console.error(`Error in /api/gemini:`, error);
-    res.status(400).json({ error: error.message || "Internal server error" });
+    res.write(JSON.stringify({ error: error.message || "Internal server error", stack: error.stack }));
+    res.end();
   }
 });
 

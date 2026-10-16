@@ -53,7 +53,7 @@ const handleGeminiError = (error: any, defaultMessage: string, contextMessage?: 
     if (error instanceof SyntaxError) {
         throw new Error("La IA devolvió una respuesta en un formato inválido. Intente de nuevo.");
     }
-    throw new Error(defaultMessage);
+    throw new Error(defaultMessage + " | DETALLE: " + errMsg);
 };
 
 export const suggestCorrection = async (deviationText: string): Promise<string> => {
@@ -152,7 +152,13 @@ export const generateRiskAssessment = async (mediaArray: any[], userPrompt: stri
             
             if (!tempFilePathToUpload && media.type && media.data && media.type.startsWith('video/')) {
                 // Video requires File API. Write to temp file.
-                tempFilePathToUpload = path.join(os.tmpdir(), `upload-${Date.now()}.mp4`);
+                const cleanType = media.type.split(';')[0];
+                let ext = 'mp4';
+                if (cleanType.includes('webm')) ext = 'webm';
+                if (cleanType.includes('ogg')) ext = 'ogg';
+                if (cleanType.includes('quicktime')) ext = 'mov';
+                
+                tempFilePathToUpload = path.join(os.tmpdir(), `upload-${Date.now()}.${ext}`);
                 // data is base64
                 const base64Data = media.url ? media.url.split(',')[1] : media.data;
                 fs.writeFileSync(tempFilePathToUpload, Buffer.from(base64Data, 'base64'));
@@ -161,13 +167,15 @@ export const generateRiskAssessment = async (mediaArray: any[], userPrompt: stri
 
             if (tempFilePathToUpload) {
                 try {
-                    const uploadResult = await executeWithRetry(() => getAI().files.upload({ file: tempFilePathToUpload, config: { mimeType: media.type || 'video/mp4' } }));
+                    const cleanMime = (media.type || 'video/mp4').split(';')[0];
+                    const uploadResult = await executeWithRetry(() => getAI().files.upload({ file: tempFilePathToUpload, config: { mimeType: cleanMime } }));
                     
                     let fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
                     let attempts = 0;
                     while (fileState.state !== 'ACTIVE' && attempts < 30) {
                         if (fileState.state === 'FAILED') {
-                            throw new Error("El procesamiento del video falló en la API de IA.");
+                            console.error("Gemini File Processing Failed:", fileState);
+                            throw new Error(`El procesamiento del archivo falló en la API de IA. Detalle: ${fileState.error?.message || 'Error desconocido'}`);
                         }
                         await new Promise(r => setTimeout(r, 2000));
                         fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
@@ -175,7 +183,7 @@ export const generateRiskAssessment = async (mediaArray: any[], userPrompt: stri
                     }
                     
                     if (fileState.state !== 'ACTIVE') {
-                            throw new Error(`El archivo de video aún no está listo. Estado actual: ${fileState.state}`);
+                            throw new Error(`El archivo aún no está listo tras múltiples intentos. Estado actual: ${fileState.state}`);
                     }
 
                     parts.push({ fileData: { fileUri: uploadResult.uri, mimeType: uploadResult.mimeType } });
@@ -393,25 +401,28 @@ export const getEPPAdvice = async (ppeItems: { item: string, status: 'good' | 'b
 }
 
 
-export const editImage = async (base64Image: string, mimeType: string, prompt: string): Promise<string> => {
-    
-
+export const editImage = async (base64Image: string, mimeType: string, prompt: string, tempFilePath?: string): Promise<string> => {
     try {
+        let parts: any[] = [];
+        
+        if (tempFilePath) {
+             const uploadResult = await executeWithRetry(() => getAI().files.upload({ file: tempFilePath, config: { mimeType } }));
+             parts.push({ fileData: { fileUri: uploadResult.uri, mimeType: uploadResult.mimeType } });
+             if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+        } else if (base64Image) {
+            parts.push({
+                inlineData: {
+                    mimeType: mimeType,
+                    data: base64Image
+                }
+            });
+        }
+
+        parts.push({ text: prompt });
+
         const response = await executeWithRetry(() => getAI().models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: {
-                parts: [
-                    {
-                        inlineData: {
-                            mimeType: mimeType,
-                            data: base64Image
-                        }
-                    },
-                    {
-                        text: prompt
-                    }
-                ]
-            }
+            model: 'gemini-3.1-flash-image',
+            contents: { parts }
         }));
 
         // The response for image editing often comes back as an image part.
@@ -470,7 +481,7 @@ export const generateRiskMap = async (base64Source: string, mimeType: string, se
             let fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
             let attempts = 0;
             while (fileState.state !== 'ACTIVE' && attempts < 30) {
-                if (fileState.state === 'FAILED') throw new Error("File processing failed.");
+                if (fileState.state === 'FAILED') throw new Error(`El procesamiento del archivo falló. Detalle: ${fileState.error?.message || 'Error desconocido'}`);
                 await new Promise(r => setTimeout(r, 2000));
                 fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
                 attempts++;
@@ -482,7 +493,7 @@ export const generateRiskMap = async (base64Source: string, mimeType: string, se
         }
 
         const response = await executeWithRetry(() => getAI().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-image',
             contents: {
                 parts: [
                     imagePart,
@@ -514,10 +525,10 @@ export const generateRiskMap = async (base64Source: string, mimeType: string, se
         } else {
             throw new Error("La IA no pudo procesar el mapa de riesgos. Intente con una imagen más clara.");
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error(error);
         if (tempFilePath && fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-        throw new Error("Error al generar mapa de riesgos.");
+        throw new Error("Error al generar mapa de riesgos: " + error.message);
     }
 };
 
@@ -587,7 +598,7 @@ export const analyzeEvacuationRoutes = async (
             let fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
             let attempts = 0;
             while (fileState.state !== 'ACTIVE' && attempts < 30) {
-                if (fileState.state === 'FAILED') throw new Error("File processing failed.");
+                if (fileState.state === 'FAILED') throw new Error(`El procesamiento del archivo falló. Detalle: ${fileState.error?.message || 'Error desconocido'}`);
                 await new Promise(r => setTimeout(r, 2000));
                 fileState = await executeWithRetry(() => getAI().files.get({ name: uploadResult.name }));
                 attempts++;
@@ -599,7 +610,7 @@ export const analyzeEvacuationRoutes = async (
         }
 
         const response = await executeWithRetry(() => getAI().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-image',
             contents: {
                 parts: [
                     imagePart,

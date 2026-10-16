@@ -22,7 +22,7 @@ interface Connector {
  * 5. Uses a standard stack-based algorithm (`parentStack`) to build the hierarchy. For each node,
  *    it finds the correct parent by popping nodes with greater or equal indentation from the stack.
  */
-const parseToNumberedTree = (text: string): NumberedTreeNode[] => {
+export const parseToNumberedTree = (text: string): NumberedTreeNode[] => {
     if (!text || !text.trim()) return [];
 
     const getIndent = (line: string): number => {
@@ -89,6 +89,27 @@ const parseToNumberedTree = (text: string): NumberedTreeNode[] => {
     return rootNodes;
 };
 
+export interface TreeLegendItem {
+  id: number;
+  text: string;
+}
+
+export const getLegendItemsFromTreeText = (text: string): TreeLegendItem[] => {
+  const tree = parseToNumberedTree(text);
+  const items: TreeLegendItem[] = [];
+  const collectLegendItems = (nodes: NumberedTreeNode[]) => {
+    nodes.forEach(node => {
+      items.push({ id: node.id, text: node.text });
+      if (node.children && node.children.length > 0) {
+        collectLegendItems(node.children);
+      }
+    });
+  };
+  collectLegendItems(tree);
+  items.sort((a, b) => a.id - b.id);
+  return items;
+};
+
 
 // Recursive component to render the tree structure with only numbers
 const RecursiveTree: React.FC<{
@@ -134,11 +155,11 @@ const Legend: React.FC<{ tree: NumberedTreeNode[] }> = ({ tree }) => {
 
 
     return (
-        <div className="tree-legend">
-            <h3 className="font-semibold text-lg text-slate-800 mb-4">Referencias</h3>
+        <div className="tree-legend" data-pdf-block>
+            <h3 className="font-semibold text-lg text-slate-800 mb-4" data-pdf-heading="true">Referencias</h3>
             <ol>
                 {legendItems.map(item => (
-                    <li key={item.id}>
+                    <li key={item.id} data-pdf-block>
                         <span className="legend-number">{item.id}</span>
                         <span className="legend-text">{item.text}</span>
                     </li>
@@ -257,7 +278,7 @@ const CauseTreeDiagram: React.FC<{ analysisText: string }> = ({ analysisText }) 
 
   return (
     <div className="cause-tree-container-graphical">
-      <div className="tree-diagram-container" ref={containerRef}>
+      <div className="tree-diagram-container" data-pdf-block ref={containerRef}>
         <svg className="svg-connectors">
             {connectors.map((c, i) => (
                 <g key={i}>

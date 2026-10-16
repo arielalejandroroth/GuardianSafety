@@ -1,0 +1,25 @@
+# ==============================================================================
+# Hostinger Configuration for SafetyGuard Pro
+# ==============================================================================
+
+# 1. Soporte para Hostinger Node.js (Phusion Passenger)
+<IfModule passenger_module>
+  PassengerEnabled on
+  PassengerAppType node
+  PassengerStartupFile app.cjs
+</IfModule>
+
+# 2. Soporte para React SPA (Redirección a index.html para evitar error 404 en subrutas)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# 3. Compresión GZIP para carga rápida en celulares
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>

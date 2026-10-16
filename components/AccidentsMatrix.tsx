@@ -3,10 +3,11 @@ import * as XLSX from 'xlsx';
 import { AccidentReport, View, ArtClassification, Causal, IncidentType, CauseTreeAnalysis, Gender, TaskType, EmployeeType, CorrectiveActionPlan, ActionType } from '../types';
 import Input from './common/Input';
 import Button from './common/Button';
-import { DocumentAddIcon, SparklesIcon, PrintIcon, UploadIcon, DownloadIcon, PencilIcon, TableIcon, DashboardIcon, EyeIcon, TrashIcon, ArrowPathIcon } from './IconComponents';
+import { DocumentAddIcon, SparklesIcon, PrintIcon, UploadIcon, DownloadIcon, PencilIcon, TableIcon, DashboardIcon, EyeIcon, TrashIcon, ArrowPathIcon, WordIcon } from './IconComponents';
 import Select from './common/Select';
 import MultiSelect from './common/MultiSelect';
 import { generateCauseTreeAnalysis } from '../services/geminiService';
+import { downloadIncidentWordDocument } from '../services/wordExportService';
 import Modal from './common/Modal';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -102,6 +103,7 @@ const AccidentsMatrix: React.FC<AccidentsMatrixProps> = ({ accidents, onNavigate
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   const [isPreparingPdf, setIsPreparingPdf] = useState(false);
+  const [isPreparingWord, setIsPreparingWord] = useState(false);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
 
   const [isEditingAnalysis, setIsEditingAnalysis] = useState(false);
@@ -487,11 +489,12 @@ const AccidentsMatrix: React.FC<AccidentsMatrixProps> = ({ accidents, onNavigate
 };
 
     useEffect(() => {
-        if (!isPreparingPdf || !pdfContainerRef.current) return;
+        if (!isPreparingPdf || !pdfContainerRef.current || !selectedAccident || !analysisResult) return;
 
         const performPdfGeneration = async () => {
             try {
-                const canvas = await html2canvas(pdfContainerRef.current!, {
+                const element = pdfContainerRef.current!;
+                const canvas = await html2canvas(element, {
                     scale: 2,
                     useCORS: true,
                     backgroundColor: '#ffffff'
@@ -503,24 +506,200 @@ const AccidentsMatrix: React.FC<AccidentsMatrixProps> = ({ accidents, onNavigate
                     format: 'a4'
                 });
 
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                
-                const canvasAspectRatio = canvas.width / canvas.height;
-                
-                let finalWidth = pdfWidth - 40;
-                let finalHeight = finalWidth / canvasAspectRatio;
+                const pdfWidth = pdf.internal.pageSize.getWidth(); // 595.28 pt
+                const pdfHeight = pdf.internal.pageSize.getHeight(); // 841.89 pt
 
-                if (finalHeight > pdfHeight - 40) {
-                    finalHeight = pdfHeight - 40;
-                    finalWidth = finalHeight * canvasAspectRatio;
+                // Márgenes simétricos: 35 pt (~12.4 mm)
+                const marginX = 35;
+                const marginY = 35;
+                const printableWidth = pdfWidth - (marginX * 2); // 525.28 pt
+                const printableHeight = pdfHeight - (marginY * 2); // 771.89 pt
+
+                const pxPerPt = canvas.width / printableWidth;
+                const footerReservedPt = 22; // Espacio reservado para el pie de página
+                const maxPageContentHeightPt = printableHeight - footerReservedPt;
+                const maxSliceHeightPx = Math.floor(maxPageContentHeightPt * pxPerPt);
+
+                const addFooter = (pageNum: number, totalPagesCount: number) => {
+                    pdf.setFontSize(8);
+                    pdf.setTextColor(148, 163, 184); // slate-400
+                    pdf.text(`SafetyGuard Pro - Informe de Investigación de Incidente N° ${selectedAccident.id}`, marginX, pdfHeight - 18);
+                    pdf.text(`Página ${pageNum} de ${totalPagesCount}`, pdfWidth - marginX, pdfHeight - 18, { align: 'right' });
+                };
+
+                // Helper para verificar si una fila horizontal del canvas no tiene tinta/texto (fondo limpio)
+                const canvasCtx = canvas.getContext('2d');
+                const isCleanRow = (y: number): boolean => {
+                    if (!canvasCtx || y < 0 || y >= canvas.height) return false;
+                    try {
+                        const imgData = canvasCtx.getImageData(0, Math.floor(y), canvas.width, 1).data;
+                        let inkPixels = 0;
+                        // Muestreo cada 3 píxeles para alta precisión y óptimo rendimiento
+                        for (let x = 0; x < canvas.width; x += 3) {
+                            const idx = x * 4;
+                            const r = imgData[idx];
+                            const g = imgData[idx + 1];
+                            const b = imgData[idx + 2];
+                            const a = imgData[idx + 3];
+                            // Si el pixel no es blanco ni fondo gris claro (es un trazo de texto o línea oscura)
+                            if (a > 40 && (r < 230 || g < 230 || b < 230)) {
+                                inkPixels++;
+                                if (inkPixels > 4) return false;
+                            }
+                        }
+                        return true;
+                    } catch {
+                        return false;
+                    }
+                };
+
+                // Busca una línea libre de trazos alrededor del punto de corte
+                const findCleanCutY = (targetY: number, minY: number): number => {
+                    const clampedTarget = Math.min(Math.floor(targetY), canvas.height - 1);
+                    if (isCleanRow(clampedTarget)) return clampedTarget;
+
+                    // Escaneo hacia arriba primero para no exceder el alto de página
+                    for (let d = 1; d <= 45; d++) {
+                        const yUp = clampedTarget - d;
+                        if (yUp >= minY && isCleanRow(yUp)) return yUp;
+                        const yDown = clampedTarget + d;
+                        if (yDown < canvas.height && isCleanRow(yDown)) return yDown;
+                    }
+                    return clampedTarget;
+                };
+
+                // Caso 1: Si el contenido cabe en una sola página (con hasta 4% de holgura para evitar páginas extra vacías)
+                const totalImgHeightPt = canvas.height / pxPerPt;
+                if (totalImgHeightPt <= printableHeight * 1.04) {
+                    let renderHeightPt = totalImgHeightPt;
+                    let renderWidthPt = printableWidth;
+                    let renderX = marginX;
+
+                    if (totalImgHeightPt > printableHeight) {
+                        const scale = printableHeight / totalImgHeightPt;
+                        renderHeightPt = printableHeight;
+                        renderWidthPt = printableWidth * scale;
+                        renderX = (pdfWidth - renderWidthPt) / 2;
+                    }
+
+                    pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', renderX, marginY, renderWidthPt, renderHeightPt);
+                    addFooter(1, 1);
+                } else {
+                    // Caso 2: Paginación inteligente basada en bloques DOM y detección de espacios limpios
+                    const containerRect = element.getBoundingClientRect();
+                    const scaleY = canvas.height / containerRect.height;
+
+                    // Recolectar todos los elementos atómicos que no deben ser cortados por la mitad
+                    const atomicEls = Array.from(
+                        element.querySelectorAll(
+                            '[data-pdf-block], tr, li, h1, h2, h3, .tree-diagram-container, .tree-legend'
+                        )
+                    ) as HTMLElement[];
+
+                    const blocks = atomicEls
+                        .map(el => {
+                            const r = el.getBoundingClientRect();
+                            return {
+                                top: (r.top - containerRect.top) * scaleY,
+                                bottom: (r.bottom - containerRect.top) * scaleY,
+                                isHeading: /^H[1-6]$/.test(el.tagName) || el.getAttribute('data-pdf-heading') === 'true'
+                            };
+                        })
+                        .filter(b => b.bottom > b.top && b.bottom <= canvas.height + 10)
+                        .sort((a, b) => a.top - b.top);
+
+                    const slices: { startY: number; endY: number }[] = [];
+                    let sourceY = 0;
+
+                    while (sourceY < canvas.height) {
+                        const remainingPx = canvas.height - sourceY;
+                        if (remainingPx <= maxSliceHeightPx) {
+                            slices.push({ startY: sourceY, endY: canvas.height });
+                            break;
+                        }
+
+                        let candidateCutY = sourceY + maxSliceHeightPx;
+
+                        // 1. Evitar cortar cualquier bloque por la mitad
+                        for (let i = 0; i < blocks.length; i++) {
+                            const b = blocks[i];
+                            if (candidateCutY > b.top && candidateCutY < b.bottom) {
+                                // Mover el corte justo antes del inicio de este bloque
+                                candidateCutY = Math.floor(b.top) - 3;
+                                break;
+                            }
+                        }
+
+                        // 2. Evitar encabezados huérfanos (títulos que quedarían solos al final de la página)
+                        for (let i = 0; i < blocks.length; i++) {
+                            const b = blocks[i];
+                            if (b.isHeading && b.top >= sourceY && b.bottom <= candidateCutY) {
+                                if ((candidateCutY - b.bottom) < 40) {
+                                    candidateCutY = Math.floor(b.top) - 3;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // 3. Salvaguarda: si el corte retrocedió demasiado (ej. un bloque gigante), buscar espacio en blanco entre líneas
+                        if (candidateCutY <= sourceY + (maxSliceHeightPx * 0.25)) {
+                            candidateCutY = findCleanCutY(
+                                sourceY + maxSliceHeightPx,
+                                sourceY + Math.floor(maxSliceHeightPx * 0.5)
+                            );
+                        } else {
+                            // Ajustar microscópicamente candidateCutY para asegurar fila 100% limpia sin trazos
+                            candidateCutY = findCleanCutY(candidateCutY, sourceY + (maxSliceHeightPx * 0.2));
+                        }
+
+                        // Si por algún motivo extremo no avanza, forzar avance seguro
+                        if (candidateCutY <= sourceY) {
+                            candidateCutY = sourceY + maxSliceHeightPx;
+                        }
+
+                        slices.push({ startY: sourceY, endY: candidateCutY });
+                        sourceY = candidateCutY;
+                    }
+
+                    // Renderizar cada página limpiamente en el PDF
+                    const totalPages = slices.length;
+                    for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+                        if (pageIdx > 0) {
+                            pdf.addPage();
+                        }
+
+                        const slice = slices[pageIdx];
+                        const sliceHeightPx = slice.endY - slice.startY;
+                        const sliceHeightPt = sliceHeightPx / pxPerPt;
+
+                        const pageCanvas = document.createElement('canvas');
+                        pageCanvas.width = canvas.width;
+                        pageCanvas.height = sliceHeightPx;
+                        const pageCtx = pageCanvas.getContext('2d');
+                        if (pageCtx) {
+                            pageCtx.fillStyle = '#ffffff';
+                            pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+                            pageCtx.drawImage(
+                                canvas,
+                                0, slice.startY, canvas.width, sliceHeightPx,
+                                0, 0, canvas.width, sliceHeightPx
+                            );
+                        }
+
+                        pdf.addImage(
+                            pageCanvas.toDataURL('image/png', 1.0),
+                            'PNG',
+                            marginX,
+                            marginY,
+                            printableWidth,
+                            sliceHeightPt
+                        );
+
+                        addFooter(pageIdx + 1, totalPages);
+                    }
                 }
 
-                const xOffset = (pdfWidth - finalWidth) / 2;
-                const yOffset = (pdfHeight - finalHeight) / 2;
-
-                pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', xOffset, yOffset, finalWidth, finalHeight);
-                pdf.save(`Analisis_Causa_Raiz_${selectedAccident?.id}.pdf`);
+                pdf.save(`Informe_Investigacion_${selectedAccident.id}.pdf`);
             } catch (err) {
                 console.error("Error generating PDF:", err);
                 alert("Hubo un error al generar el PDF.");
@@ -528,14 +707,115 @@ const AccidentsMatrix: React.FC<AccidentsMatrixProps> = ({ accidents, onNavigate
                 setIsPreparingPdf(false);
             }
         };
-        
-        const timer = setTimeout(performPdfGeneration, 300);
+
+        const timer = setTimeout(performPdfGeneration, 350);
         return () => clearTimeout(timer);
-    }, [isPreparingPdf, selectedAccident]);
+    }, [isPreparingPdf, selectedAccident, analysisResult]);
 
     const handleDownloadPdf = () => {
         if (!selectedAccident || !analysisResult) return;
         setIsPreparingPdf(true);
+    };
+
+    const handleDownloadWord = async () => {
+        if (!selectedAccident || !analysisResult) return;
+        setIsPreparingWord(true);
+        try {
+            let diagramBase64: string | null = null;
+            let diagramDimensions: { width: number; height: number } | null = null;
+
+            // Capturar el contenedor del diagrama de causas renderizado
+            const treeContainer = document.querySelector<HTMLElement>('#analysis-modal-content .tree-diagram-container')
+                || document.querySelector<HTMLElement>('.tree-diagram-container');
+
+            const trimCanvas = (sourceCanvas: HTMLCanvasElement): HTMLCanvasElement => {
+                const ctx = sourceCanvas.getContext('2d');
+                if (!ctx) return sourceCanvas;
+                const { width, height } = sourceCanvas;
+                const imgData = ctx.getImageData(0, 0, width, height);
+                const { data } = imgData;
+
+                let minX = width, minY = height, maxX = 0, maxY = 0;
+                let found = false;
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const i = (y * width + x) * 4;
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        const a = data[i + 3];
+
+                        // Detectar trazos de líneas, nodos y textos no blancos
+                        if (a > 30 && (r < 245 || g < 245 || b < 245)) {
+                            found = true;
+                            if (x < minX) minX = x;
+                            if (x > maxX) maxX = x;
+                            if (y < minY) minY = y;
+                            if (y > maxY) maxY = y;
+                        }
+                    }
+                }
+
+                if (!found) return sourceCanvas;
+
+                // Añadir margen limpio alrededor de los elementos reales del diagrama
+                const padding = 30;
+                minX = Math.max(0, minX - padding);
+                minY = Math.max(0, minY - padding);
+                maxX = Math.min(width - 1, maxX + padding);
+                maxY = Math.min(height - 1, maxY + padding);
+
+                const trimmedWidth = maxX - minX + 1;
+                const trimmedHeight = maxY - minY + 1;
+
+                const trimmed = document.createElement('canvas');
+                trimmed.width = trimmedWidth;
+                trimmed.height = trimmedHeight;
+                const tCtx = trimmed.getContext('2d');
+                if (!tCtx) return sourceCanvas;
+
+                tCtx.fillStyle = '#ffffff';
+                tCtx.fillRect(0, 0, trimmedWidth, trimmedHeight);
+                tCtx.drawImage(
+                    sourceCanvas,
+                    minX, minY, trimmedWidth, trimmedHeight,
+                    0, 0, trimmedWidth, trimmedHeight
+                );
+
+                return trimmed;
+            };
+
+            if (treeContainer) {
+                try {
+                    const rawCanvas = await html2canvas(treeContainer, {
+                        scale: 3,
+                        useCORS: true,
+                        backgroundColor: '#ffffff'
+                    });
+                    const finalCanvas = trimCanvas(rawCanvas);
+                    diagramBase64 = finalCanvas.toDataURL('image/png', 1.0);
+                    diagramDimensions = {
+                        width: finalCanvas.width,
+                        height: finalCanvas.height
+                    };
+                } catch (canvasErr) {
+                    console.warn('No se pudo capturar el canvas del árbol para Word', canvasErr);
+                }
+            }
+
+            await downloadIncidentWordDocument({
+                accident: selectedAccident,
+                analysis: analysisResult,
+                diagramImageBase64: diagramBase64,
+                diagramImageDimensions: diagramDimensions
+            });
+        } catch (err) {
+            console.error("Error generating Word document:", err);
+            alert("Hubo un error al generar el documento de Word.");
+        } finally {
+            setIsPreparingWord(false);
+        }
     };
 
   
@@ -845,11 +1125,32 @@ const AccidentsMatrix: React.FC<AccidentsMatrixProps> = ({ accidents, onNavigate
             size="4xl"
         >
             {analysisResult && (
-                <div className="flex justify-end gap-2 mb-4 no-print">
+                <div className="flex flex-wrap items-center justify-end gap-2 mb-4 no-print">
                     {!isEditingAnalysis && (
                         <>
+                            <Button
+                                variant="secondary"
+                                onClick={handleDownloadPdf}
+                                isLoading={isPreparingPdf}
+                                disabled={isPreparingPdf || isPreparingWord}
+                                title="Descargar informe en formato PDF"
+                            >
+                                <PrintIcon className="h-4 w-4 mr-1.5" />
+                                PDF
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                className="!text-[#185abd] hover:!bg-blue-50 border-[#cbd5e1]"
+                                onClick={handleDownloadWord}
+                                isLoading={isPreparingWord}
+                                disabled={isPreparingPdf || isPreparingWord}
+                                title="Descargar informe en formato Microsoft Word (.docx)"
+                            >
+                                <WordIcon className="h-4 w-4 mr-1.5 text-[#185abd]" />
+                                Word (.docx)
+                            </Button>
                             <Button variant="secondary" onClick={() => setIsEditingAnalysis(true)} disabled={isAnalyzing}>
-                                <PencilIcon className="h-5 w-5 mr-2" />
+                                <PencilIcon className="h-4 w-4 mr-1.5" />
                                 Editar Análisis
                             </Button>
                         </>
@@ -976,15 +1277,27 @@ const AccidentsMatrix: React.FC<AccidentsMatrixProps> = ({ accidents, onNavigate
                   <>
                     <Button variant="secondary" onClick={() => setSelectedAccident(null)}>Cerrar</Button>
                     {analysisResult && (
-                      <Button
-                          variant="primary"
-                          onClick={handleDownloadPdf}
-                          isLoading={isPreparingPdf}
-                          disabled={isPreparingPdf}
-                      >
-                          <PrintIcon className="h-5 w-5 mr-2" />
-                          Descargar PDF
-                      </Button>
+                      <>
+                        <Button
+                            variant="primary"
+                            onClick={handleDownloadPdf}
+                            isLoading={isPreparingPdf}
+                            disabled={isPreparingPdf || isPreparingWord}
+                        >
+                            <PrintIcon className="h-5 w-5 mr-2" />
+                            Descargar PDF
+                        </Button>
+                        <Button
+                            variant="primary"
+                            className="!bg-[#185abd] hover:!bg-[#11499c] !border-[#185abd] text-white shadow-sm"
+                            onClick={handleDownloadWord}
+                            isLoading={isPreparingWord}
+                            disabled={isPreparingPdf || isPreparingWord}
+                        >
+                            <WordIcon className="h-5 w-5 mr-2" />
+                            Descargar Word (.docx)
+                        </Button>
+                      </>
                     )}
                   </>
                 )}
@@ -1030,64 +1343,86 @@ const AccidentsMatrix: React.FC<AccidentsMatrixProps> = ({ accidents, onNavigate
 
     {isPreparingPdf && selectedAccident && analysisResult && (
       <div className="printable-pdf-area">
-          <div ref={pdfContainerRef} className="p-5">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #00529B', paddingBottom: '8px', marginBottom: '16px' }}>
-                  <img src={minervaLogoBase64} alt="Minerva Foods Logo" style={{ height: '12px' }} />
-                  <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: '#002A50', margin: 0 }}>Análisis de Incidente: Árbol de Causas</h1>
+          <div ref={pdfContainerRef} style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#ffffff', color: '#1e293b' }}>
+              <div data-pdf-block style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #00529B', paddingBottom: '8px', marginBottom: '12px' }}>
+                  <img src={minervaLogoBase64} alt="Minerva Foods Logo" style={{ height: '32px', maxWidth: '140px', objectFit: 'contain' }} />
+                  <div style={{ textAlign: 'right' }}>
+                      <h1 data-pdf-heading="true" style={{ fontSize: '15px', fontWeight: 'bold', color: '#002A50', margin: 0 }}>Informe de Investigación de Accidente / Incidente</h1>
+                      <p style={{ fontSize: '10px', color: '#64748b', margin: '2px 0 0 0', fontWeight: '500' }}>Análisis Causa Raíz - Metodología Árbol de Causas</p>
+                  </div>
               </div>
-              <table style={{ width: '100%', fontSize: '9px', borderCollapse: 'collapse', marginBottom: '16px' }}>
+
+              <table data-pdf-block style={{ width: '100%', fontSize: '9.5px', borderCollapse: 'collapse', marginBottom: '12px' }}>
                   <tbody>
-                      <tr>
-                          <td style={{ fontWeight: 'bold', padding: '3px', border: '1px solid #ddd', background: '#f8fafc' }}>Incidente ID:</td>
-                          <td style={{ padding: '3px', border: '1px solid #ddd' }}>{selectedAccident.id}</td>
-                          <td style={{ fontWeight: 'bold', padding: '3px', border: '1px solid #ddd', background: '#f8fafc' }}>Fecha:</td>
-                          <td style={{ padding: '3px', border: '1px solid #ddd' }}>{formatDate(selectedAccident.date)}</td>
+                      <tr data-pdf-block>
+                          <td style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #cbd5e1', background: '#f8fafc', width: '18%' }}>Incidente ID:</td>
+                          <td style={{ padding: '5px 8px', border: '1px solid #cbd5e1', width: '32%', fontWeight: '600' }}>{selectedAccident.id}</td>
+                          <td style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #cbd5e1', background: '#f8fafc', width: '18%' }}>Fecha y Hora:</td>
+                          <td style={{ padding: '5px 8px', border: '1px solid #cbd5e1', width: '32%' }}>{formatDate(selectedAccident.date)} {selectedAccident.time ? `- ${selectedAccident.time}` : ''}</td>
                       </tr>
-                      <tr>
-                          <td style={{ fontWeight: 'bold', padding: '3px', border: '1px solid #ddd', background: '#f8fafc' }}>Colaborador:</td>
-                          <td colSpan={3} style={{ padding: '3px', border: '1px solid #ddd' }}>{selectedAccident.collaboratorName} ({selectedAccident.legajo})</td>
+                      <tr data-pdf-block>
+                          <td style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>Planta / Sector:</td>
+                          <td style={{ padding: '5px 8px', border: '1px solid #cbd5e1' }}>{selectedAccident.planta || 'Swift'} / {selectedAccident.sector || 'N/A'}</td>
+                          <td style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>Supervisor:</td>
+                          <td style={{ padding: '5px 8px', border: '1px solid #cbd5e1' }}>{selectedAccident.supervisor || 'N/A'}</td>
                       </tr>
-                       <tr>
-                          <td style={{ fontWeight: 'bold', padding: '3px', border: '1px solid #ddd', background: '#f8fafc' }}>Tipo:</td>
-                          <td colSpan={3} style={{ padding: '3px', border: '1px solid #ddd' }}>{selectedAccident.employeeType} ({selectedAccident.contractorCompany || 'N/A'})</td>
+                      <tr data-pdf-block>
+                          <td style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>Colaborador:</td>
+                          <td style={{ padding: '5px 8px', border: '1px solid #cbd5e1' }}>{selectedAccident.collaboratorName} ({selectedAccident.legajo || 'S/L'})</td>
+                          <td style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>Tipo Empleado:</td>
+                          <td style={{ padding: '5px 8px', border: '1px solid #cbd5e1' }}>{selectedAccident.employeeType} {selectedAccident.contractorCompany ? `(${selectedAccident.contractorCompany})` : ''}</td>
                       </tr>
-                      <tr>
-                          <td style={{ fontWeight: 'bold', padding: '3px', border: '1px solid #ddd', background: '#f8fafc' }}>Hecho Último:</td>
-                          <td colSpan={3} style={{ padding: '3px', border: '1px solid #ddd', fontWeight: 'bold', color: '#be123c' }}>{analysisResult.hechoUltimo}</td>
+                      <tr data-pdf-block>
+                          <td style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>Hecho Último:</td>
+                          <td colSpan={3} style={{ padding: '5px 8px', border: '1px solid #cbd5e1', fontWeight: 'bold', color: '#be123c', background: '#fff1f2' }}>{analysisResult.hechoUltimo}</td>
                       </tr>
                   </tbody>
               </table>
-              <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: '#003F7A', marginTop: '16px', borderBottom: '1px solid #ccc', paddingBottom: '4px' }}>Descripción de lo Sucedido</h2>
-              <div style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '10px', marginTop: '8px', backgroundColor: '#f8fafc', whiteSpace: 'pre-wrap' }}>
-                  {selectedAccident.description || 'Sin descripción detallada.'}
+
+              <div data-pdf-block style={{ marginBottom: '12px' }}>
+                  <h2 data-pdf-heading="true" style={{ fontSize: '12px', fontWeight: 'bold', color: '#003F7A', marginTop: '6px', marginBottom: '4px', borderBottom: '1.5px solid #00529B', paddingBottom: '3px' }}>Descripción de lo Sucedido</h2>
+                  <div style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '9.5px', marginTop: '4px', backgroundColor: '#f8fafc', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+                      {selectedAccident.description || 'Sin descripción detallada.'}
+                  </div>
               </div>
-              <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: '#003F7A', marginTop: '16px', borderBottom: '1px solid #ccc', paddingBottom: '4px' }}>Diagrama de Causas</h2>
-              <div className="p-2 border rounded-lg bg-white">
-                  <CauseTreeDiagram analysisText={analysisResult.analisis} />
+
+              <div data-pdf-block style={{ marginBottom: '12px' }}>
+                  <h2 data-pdf-heading="true" style={{ fontSize: '12px', fontWeight: 'bold', color: '#003F7A', marginTop: '6px', marginBottom: '4px', borderBottom: '1.5px solid #00529B', paddingBottom: '3px' }}>Diagrama de Árbol de Causas</h2>
+                  <div style={{ padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: '#ffffff', marginTop: '4px' }}>
+                      <CauseTreeDiagram analysisText={analysisResult.analisis} />
+                  </div>
               </div>
-              <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: '#003F7A', marginTop: '16px', borderBottom: '1px solid #ccc', paddingBottom: '4px' }}>Causas Raíz Identificadas</h2>
-              <ul style={{ listStyleType: 'disc', paddingLeft: '20px', fontSize: '10px', marginTop: '8px' }}>
-                  {analysisResult.causasRaiz.map((causa, index) => (
-                      <li key={index} style={{ marginBottom: '4px' }}>{causa}</li>
-                  ))}
-              </ul>
-              <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: '#003F7A', marginTop: '16px', borderBottom: '1px solid #ccc', paddingBottom: '4px' }}>Plan de Acción Correctiva</h2>
-                <table style={{ width: '100%', fontSize: '9px', borderCollapse: 'collapse', marginTop: '8px' }}>
-                    <thead>
-                        <tr style={{ background: '#f1f5f9', color: '#334155' }}>
-                            <th style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #e2e8f0', textAlign: 'left' }}>Acción Propuesta</th>
-                            <th style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #e2e8f0', textAlign: 'left' }}>Responsable</th>
-                            <th style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #e2e8f0', textAlign: 'left' }}>Fecha Planificada</th>
-                        </tr>
-                    </thead>
-                    <tbody dangerouslySetInnerHTML={{ __html: (analysisResult.accionesCorrectivas || []).map((action, index) => `
-                        <tr style="background-color: ${index % 2 === 0 ? '#ffffff' : '#f8fafc'};">
-                            <td style="padding: 5px 8px; border: 1px solid #e2e8f0;">${action.description}</td>
-                            <td style="padding: 5px 8px; border: 1px solid #e2e8f0;">${action.responsible}</td>
-                            <td style="padding: 5px 8px; border: 1px solid #e2e8f0; white-space: nowrap;">${formatDate(action.plannedDate)}</td>
-                        </tr>
-                    `).join('') }} />
-                </table>
+
+              <div data-pdf-block style={{ marginBottom: '12px' }}>
+                  <h2 data-pdf-heading="true" style={{ fontSize: '12px', fontWeight: 'bold', color: '#003F7A', marginTop: '6px', marginBottom: '4px', borderBottom: '1.5px solid #00529B', paddingBottom: '3px' }}>Causas Raíz Identificadas</h2>
+                  <ul style={{ listStyleType: 'disc', paddingLeft: '22px', fontSize: '9.5px', marginTop: '4px', marginBottom: '4px', lineHeight: '1.4' }}>
+                      {analysisResult.causasRaiz.map((causa, index) => (
+                          <li data-pdf-block key={index} style={{ marginBottom: '3px', color: '#1e293b' }}>{causa}</li>
+                      ))}
+                  </ul>
+              </div>
+
+              <div data-pdf-block>
+                  <h2 data-pdf-heading="true" style={{ fontSize: '12px', fontWeight: 'bold', color: '#003F7A', marginTop: '6px', marginBottom: '4px', borderBottom: '1.5px solid #00529B', paddingBottom: '3px' }}>Plan de Acción Correctiva</h2>
+                  <table style={{ width: '100%', fontSize: '9.5px', borderCollapse: 'collapse', marginTop: '4px', border: '1px solid #cbd5e1' }}>
+                      <thead>
+                          <tr data-pdf-block style={{ background: '#f1f5f9', color: '#334155' }}>
+                              <th style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #cbd5e1', textAlign: 'left', width: '55%' }}>Acción Propuesta</th>
+                              <th style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #cbd5e1', textAlign: 'left', width: '25%' }}>Responsable</th>
+                              <th style={{ fontWeight: 'bold', padding: '5px 8px', border: '1px solid #cbd5e1', textAlign: 'center', width: '20%' }}>Fecha Planificada</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {(analysisResult.accionesCorrectivas || []).map((action, index) => (
+                              <tr data-pdf-block key={index} style={{ backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                                  <td style={{ padding: '5px 8px', border: '1px solid #cbd5e1' }}>{action.description}</td>
+                                  <td style={{ padding: '5px 8px', border: '1px solid #cbd5e1' }}>{action.responsible}</td>
+                                  <td style={{ padding: '5px 8px', border: '1px solid #cbd5e1', textAlign: 'center', whiteSpace: 'nowrap' }}>{formatDate(action.plannedDate)}</td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
           </div>
       </div>
     )}

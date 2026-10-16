@@ -1,12 +1,14 @@
 import React, { useState, useRef } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { InternalAuditFormState, View } from '../types';
+import { InternalAuditFormState, View, ActionType } from '../types';
 import Card from './common/Card';
 import Button from './common/Button';
-import { DocumentAddIcon, PrintIcon } from './IconComponents';
+import { DocumentAddIcon, PrintIcon, TrashIcon } from './IconComponents';
 import Modal from './common/Modal';
 import { swiftLogoBase64 } from '../assets/logo';
+import { useAppContext } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const PrintableAuditReport = React.forwardRef<HTMLDivElement, { audit: InternalAuditFormState }>(({ audit }, ref) => {
     const deviations = audit.checklist.filter(item => item.status === 'No');
@@ -130,8 +132,17 @@ interface AuditsMatrixProps {
 }
 
 const AuditsMatrix: React.FC<AuditsMatrixProps> = ({ audits, onNavigate }) => {
+    const { dispatch } = useAppContext();
+    const { isAdmin } = useAuth();
     const [selectedAudit, setSelectedAudit] = useState<InternalAuditFormState | null>(null);
     const sortedAudits = [...audits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const handleDeleteAudit = (audit: InternalAuditFormState) => {
+        const idToDelete = (audit as any).id || audit.date;
+        if (confirm(`¿Estás seguro de que deseas eliminar la auditoría de ${audit.sector} (${audit.date})?`)) {
+            dispatch({ type: ActionType.DELETE_AUDIT, payload: idToDelete });
+        }
+    };
 
     return (
         <Card>
@@ -162,9 +173,20 @@ const AuditsMatrix: React.FC<AuditsMatrixProps> = ({ audits, onNavigate }) => {
                                 <td className="px-4 py-4 whitespace-nowrap">{audit.auditLead}</td>
                                 <td className="px-4 py-4 whitespace-nowrap text-center">{audit.checklist.filter(i => i.status === 'No').length}</td>
                                 <td className="px-4 py-4 whitespace-nowrap">
-                                    <Button size="sm" onClick={() => setSelectedAudit(audit)}>
-                                        Ver Informe
-                                    </Button>
+                                    <div className="flex items-center space-x-2">
+                                        <Button size="sm" onClick={() => setSelectedAudit(audit)}>
+                                            Ver Informe
+                                        </Button>
+                                        {isAdmin && (
+                                            <button
+                                                onClick={() => handleDeleteAudit(audit)}
+                                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                title="Eliminar auditoría"
+                                            >
+                                                <TrashIcon className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ))}

@@ -30,10 +30,12 @@ import Footer from './components/Footer';
 import { generateCauseTreeAnalysis } from './services/geminiService';
 import ImageGenerator from './components/ImageGenerator';
 import Login from './components/Login';
+import UserManagement from './components/UserManagement';
+import AccessDenied from './components/AccessDenied';
 
 const App: React.FC = () => {
   const { state, dispatch } = useAppContext();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isAuthorized } = useAuth();
   const { findings, dialogues, qualifications, observations, forkliftChecklists, accidents, riskEvaluations, audits, isInitialized } = state;
 
   const [currentView, setCurrentView] = useState<View>(View.DASHBOARD);
@@ -248,6 +250,8 @@ const App: React.FC = () => {
         return <ImageGenerator />;
       case View.EVALUATION_HISTORY:
         return <EvaluationHistory evaluations={riskEvaluations} onUpdate={handleUpdateEvaluation} onNavigate={handleNavigate} />;
+      case View.USER_MANAGEMENT:
+        return <UserManagement />;
       default:
         return <Dashboard findings={findings} dialogues={dialogues} qualifications={qualifications} observations={observations} onNavigate={handleNavigate} />;
     }
@@ -261,7 +265,7 @@ const App: React.FC = () => {
     );
   }
   
-  if (!isInitialized || authLoading) {
+  if (authLoading) {
       return (
           <div className="min-h-screen bg-slate-100 flex items-center justify-center">
               <div className="flex flex-col items-center">
@@ -269,7 +273,7 @@ const App: React.FC = () => {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <p className="mt-4 text-slate-600">Cargando datos de la aplicación...</p>
+                  <p className="mt-4 text-slate-600">Verificando credenciales de usuario...</p>
               </div>
           </div>
       );
@@ -277,6 +281,25 @@ const App: React.FC = () => {
 
   if (!user && !standaloneQualification) {
       return <Login />;
+  }
+
+  // If user is authenticated but not authorized (revoked or pending)
+  if (user && !isAuthorized && !standaloneQualification) {
+      return <AccessDenied />;
+  }
+
+  if (!isInitialized) {
+      return (
+          <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+              <div className="flex flex-col items-center">
+                  <svg className="animate-spin h-10 w-10 text-brand-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <p className="mt-4 text-slate-600">Sincronizando base de datos corporativa...</p>
+              </div>
+          </div>
+      );
   }
 
   return (

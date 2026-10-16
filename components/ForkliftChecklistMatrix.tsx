@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { ForkliftChecklist, View, Attachment } from '../types';
+import { ForkliftChecklist, View, Attachment, ActionType } from '../types';
 import Input from './common/Input';
 import Button from './common/Button';
 import Card from './common/Card';
-import { DocumentAddIcon, PaperClipIcon } from './IconComponents';
+import { DocumentAddIcon, PaperClipIcon, TrashIcon } from './IconComponents';
 import ViewAttachmentsModal from './ViewAttachmentsModal';
+import { useAppContext } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ForkliftChecklistMatrixProps {
   checklists: ForkliftChecklist[];
@@ -12,9 +14,17 @@ interface ForkliftChecklistMatrixProps {
 }
 
 const ForkliftChecklistMatrix: React.FC<ForkliftChecklistMatrixProps> = ({ checklists, onNavigate }) => {
+  const { dispatch } = useAppContext();
+  const { isAdmin } = useAuth();
   const [filterText, setFilterText] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [viewingAttachments, setViewingAttachments] = useState<Attachment[] | null>(null);
+
+  const handleDeleteChecklist = (id: string, forkliftNum: string) => {
+    if (confirm(`¿Estás seguro de eliminar el control del Autoelevador N° ${forkliftNum} (${id})?`)) {
+      dispatch({ type: ActionType.DELETE_FORKLIFT_CHECKLIST, payload: id });
+    }
+  };
   
   const sortedChecklists = useMemo(() => {
     return [...checklists].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -95,11 +105,22 @@ const ForkliftChecklistMatrix: React.FC<ForkliftChecklistMatrixProps> = ({ check
                   <td className="px-3 py-4 whitespace-nowrap text-sm font-semibold">{c.authorized}</td>
                   <td className="px-3 py-4 whitespace-nowrap text-sm font-bold">{c.hasFindings ? 'SI' : 'NO'}</td>
                   <td className="px-3 py-4 whitespace-nowrap text-sm">
-                    {c.hasFindings && (
-                      <Button size="sm" onClick={() => toggleRowExpansion(c.id)}>
-                        {expandedRows.has(c.id) ? 'Ocultar' : 'Ver Detalles'}
-                      </Button>
-                    )}
+                    <div className="flex items-center space-x-2">
+                      {c.hasFindings && (
+                        <Button size="sm" onClick={() => toggleRowExpansion(c.id)}>
+                          {expandedRows.has(c.id) ? 'Ocultar' : 'Ver Detalles'}
+                        </Button>
+                      )}
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteChecklist(c.id, c.forkliftNumber)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Eliminar control"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
                 {expandedRows.has(c.id) && c.hasFindings && (

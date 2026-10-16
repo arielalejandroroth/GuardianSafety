@@ -3,10 +3,11 @@ import { Finding, FindingStatus, FindingSource, RiskLevel, Attachment, ActionTyp
 import Input from './common/Input';
 import Select from './common/Select';
 import Button from './common/Button';
-import { PencilIcon, PaperClipIcon } from './IconComponents';
+import { PencilIcon, PaperClipIcon, TrashIcon } from './IconComponents';
 import EditFindingModal from './EditFindingModal';
 import ViewAttachmentsModal from './ViewAttachmentsModal';
 import { useAppContext } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface FindingsMatrixProps {
   findings: Finding[];
@@ -41,6 +42,7 @@ const StatusBadge: React.FC<{ status: FindingStatus }> = ({ status }) => {
 
 const FindingsMatrix: React.FC<FindingsMatrixProps> = ({ findings }) => {
   const { dispatch } = useAppContext();
+  const { isAdmin } = useAuth();
   const [filterText, setFilterText] = useState('');
   const [filterPlant, setFilterPlant] = useState('');
   const [filterSource, setFilterSource] = useState('');
@@ -78,6 +80,12 @@ const FindingsMatrix: React.FC<FindingsMatrixProps> = ({ findings }) => {
     dispatch({ type: ActionType.UPDATE_FINDING, payload: updatedFinding });
     setIsModalOpen(false);
     setEditingFinding(null);
+  };
+
+  const handleDeleteFinding = (findingId: string) => {
+    if (confirm(`¿Estás seguro de que deseas eliminar el hallazgo ${findingId}?`)) {
+      dispatch({ type: ActionType.DELETE_FINDING, payload: findingId });
+    }
   };
 
   return (
@@ -154,9 +162,20 @@ const FindingsMatrix: React.FC<FindingsMatrixProps> = ({ findings }) => {
                           )}
                         </td>
                         <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
-                            <Button variant="secondary" onClick={() => handleEditClick(finding)} size="sm">
-                                <PencilIcon className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center space-x-1.5">
+                                <Button variant="secondary" onClick={() => handleEditClick(finding)} size="sm" title="Editar hallazgo">
+                                    <PencilIcon className="h-4 w-4" />
+                                </Button>
+                                {isAdmin && (
+                                    <button
+                                        onClick={() => handleDeleteFinding(finding.id)}
+                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                        title="Eliminar hallazgo"
+                                    >
+                                        <TrashIcon className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
                         </td>
                     </tr>
                 );

@@ -2,19 +2,27 @@ export enum ActionType {
     INITIALIZE_STATE = 'INITIALIZE_STATE',
     ADD_FINDING = 'ADD_FINDING',
     UPDATE_FINDING = 'UPDATE_FINDING',
+    DELETE_FINDING = 'DELETE_FINDING',
     SET_FINDINGS = 'SET_FINDINGS',
     ADD_OBSERVATION = 'ADD_OBSERVATION',
+    DELETE_OBSERVATION = 'DELETE_OBSERVATION',
     ADD_AUDIT = 'ADD_AUDIT',
+    DELETE_AUDIT = 'DELETE_AUDIT',
     ADD_ACCIDENT = 'ADD_ACCIDENT',
     UPDATE_ACCIDENT = 'UPDATE_ACCIDENT',
     DELETE_ACCIDENT = 'DELETE_ACCIDENT',
     SET_ACCIDENTS = 'SET_ACCIDENTS',
     ADD_DIALOGUE = 'ADD_DIALOGUE',
+    DELETE_DIALOGUE = 'DELETE_DIALOGUE',
     ADD_QUALIFICATION = 'ADD_QUALIFICATION',
     UPDATE_QUALIFICATION = 'UPDATE_QUALIFICATION',
+    DELETE_QUALIFICATION = 'DELETE_QUALIFICATION',
     ADD_FORKLIFT_CHECKLIST = 'ADD_FORKLIFT_CHECKLIST',
+    DELETE_FORKLIFT_CHECKLIST = 'DELETE_FORKLIFT_CHECKLIST',
     ADD_RISK_EVALUATION = 'ADD_RISK_EVALUATION',
     UPDATE_RISK_EVALUATION = 'UPDATE_RISK_EVALUATION',
+    DELETE_RISK_EVALUATION = 'DELETE_RISK_EVALUATION',
+    RESET_COMPANY_STATE = 'RESET_COMPANY_STATE',
 }
 
 export enum View {
@@ -37,6 +45,25 @@ export enum View {
   EVALUATION_HISTORY = 'EVALUATION_HISTORY',
   PPE_MATRIX = 'PPE_MATRIX',
   IMAGE_GENERATOR = 'IMAGE_GENERATOR',
+  USER_MANAGEMENT = 'USER_MANAGEMENT',
+}
+
+export type UserRole = 'admin' | 'supervisor' | 'lector';
+export type UserStatus = 'active' | 'revoked' | 'pending';
+
+export interface AuthorizedUser {
+  id: string; // usually email or UID
+  uid?: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  status: UserStatus;
+  plant?: string;
+  sector?: string;
+  assignedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string;
 }
 
 export enum RiskLevel {
@@ -141,6 +168,7 @@ export interface AuditChecklistItem {
 }
 
 export interface InternalAuditFormState {
+    id?: string;
     plant: string;
     process: string;
     area: string;
@@ -427,16 +455,24 @@ export type Action =
   | { type: ActionType.INITIALIZE_STATE; payload: Omit<AppState, 'isInitialized'> }
   | { type: ActionType.ADD_FINDING; payload: Finding }
   | { type: ActionType.UPDATE_FINDING; payload: Finding }
+  | { type: ActionType.DELETE_FINDING; payload: string }
   | { type: ActionType.SET_FINDINGS; payload: Finding[] }
   | { type: ActionType.ADD_OBSERVATION; payload: ObservationFormState }
+  | { type: ActionType.DELETE_OBSERVATION; payload: string }
   | { type: ActionType.ADD_AUDIT; payload: InternalAuditFormState }
+  | { type: ActionType.DELETE_AUDIT; payload: string }
   | { type: ActionType.ADD_ACCIDENT; payload: AccidentReport }
   | { type: ActionType.UPDATE_ACCIDENT; payload: AccidentReport }
   | { type: ActionType.DELETE_ACCIDENT; payload: string } // payload is accident id
   | { type: ActionType.SET_ACCIDENTS; payload: AccidentReport[] }
   | { type: ActionType.ADD_DIALOGUE; payload: DialogueFormState }
+  | { type: ActionType.DELETE_DIALOGUE; payload: string }
   | { type: ActionType.ADD_QUALIFICATION; payload: Qualification }
   | { type: ActionType.UPDATE_QUALIFICATION; payload: Qualification }
+  | { type: ActionType.DELETE_QUALIFICATION; payload: string }
   | { type: ActionType.ADD_FORKLIFT_CHECKLIST; payload: ForkliftChecklist }
+  | { type: ActionType.DELETE_FORKLIFT_CHECKLIST; payload: string }
   | { type: ActionType.ADD_RISK_EVALUATION; payload: RiskEvaluation }
-  | { type: ActionType.UPDATE_RISK_EVALUATION; payload: RiskEvaluation };
+  | { type: ActionType.UPDATE_RISK_EVALUATION; payload: RiskEvaluation }
+  | { type: ActionType.DELETE_RISK_EVALUATION; payload: string }
+  | { type: ActionType.RESET_COMPANY_STATE; payload: Omit<AppState, 'isInitialized'> };
