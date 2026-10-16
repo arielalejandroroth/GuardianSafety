@@ -16,7 +16,8 @@ app.use((req, res, next) => {
 });
 
 // Attach API routes synchronously so serverless functions can use them immediately
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+// Attach API routes synchronously so serverless functions can use them immediately
+const PORT = process.env.PORT || 3000;
 
 // Needed for receiving large documents like base64 images
 app.use(express.json({ limit: "50mb" }));
@@ -145,10 +146,19 @@ async function startServer() {
   }
 
   // Only listen if not running in Vercel Serverless Function and if explicitly started
+  // Only listen if not running in Vercel Serverless Function and if explicitly started
   if (!process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
+    const rawPort = process.env.PORT || 3000;
+    if (typeof rawPort === 'string' && (isNaN(Number(rawPort)) || rawPort.startsWith('/') || rawPort.startsWith('\\\\'))) {
+      app.listen(rawPort, () => {
+        console.log(`Server running on Passenger socket ${rawPort}`);
+      });
+    } else {
+      const portNum = Number(rawPort);
+      app.listen(portNum, '0.0.0.0', () => {
+        console.log(`Server running on http://0.0.0.0:${portNum}`);
+      });
+    }
   }
 }
 

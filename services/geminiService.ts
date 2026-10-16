@@ -1,4 +1,20 @@
-import { AccidentReport, CauseTreeAnalysis, ArtClassification, Attachment, RiskItem, RiskEvaluation, SafeWorkProcedure, Finding, Qualification, DialogueFormState, ObservationFormState, ForkliftChecklist } from '../types';
+import { 
+    AccidentReport, 
+    CauseTreeAnalysis, 
+    ArtClassification, 
+    Attachment, 
+    RiskItem, 
+    RiskEvaluation, 
+    SafeWorkProcedure, 
+    Finding, 
+    Qualification, 
+    DialogueFormState, 
+    ObservationFormState, 
+    ForkliftChecklist 
+} from '../types';
+import { executeClientFallback, getGeminiApiKey, setGeminiApiKey } from './geminiClientFallback';
+
+export { getGeminiApiKey, setGeminiApiKey };
 
 interface AppData {
     findings: Finding[];
@@ -10,6 +26,10 @@ interface AppData {
 }
 
 const callApi = async (action: string, payload: any) => {
+    // Si ya hay una clave Gemini configurada en el cliente y estamos en un hosting estático o falla el servidor,
+    // usamos la ejecución de contingencia directa.
+    const localKey = getGeminiApiKey();
+
     try {
         const payloadCopy = JSON.parse(JSON.stringify(payload));
         
@@ -19,11 +39,10 @@ const callApi = async (action: string, payload: any) => {
         }
         
         if (payloadCopy && payloadCopy.base64Source) {
-            filesToChunk.push(payloadCopy); // payloadCopy itself holds base64Source
+            filesToChunk.push(payloadCopy);
         }
-
         if (payloadCopy && payloadCopy.base64Image) {
-            filesToChunk.push(payloadCopy); // payloadCopy itself holds base64Image
+            filesToChunk.push(payloadCopy);
         }
 
         for (let i = 0; i < filesToChunk.length; i++) {
@@ -67,29 +86,40 @@ const callApi = async (action: string, payload: any) => {
             body: JSON.stringify({ action, payload: payloadCopy })
         });
         
-        let data;
+        const contentType = response.headers.get("content-type") || "";
         const text = await response.text();
-        const contentType = response.headers.get("content-type");
-        
-        if (!contentType || !contentType.includes("application/json")) {
-            console.error("No JSON response:", text.substring(0, 200));
-            throw new Error(`El servidor devolvió una respuesta en HTML en lugar de JSON (Código ${response.status}). Posible proxy/timeout cortó la conexión.`);
+
+        // Si el servidor devolvió HTML (típico de Hostinger cuando no hay proceso Node.js y Apache sirve index.html)
+        // o si dio 404 / 502 / 503, activamos el fallback directo de Gemini del cliente.
+        if (!contentType.includes("application/json") || response.status === 404 || response.status === 502) {
+            console.warn(`[GeminiService] Servidor respondió con ${response.status} (${contentType || 'sin content-type'}). Activando fallback cliente...`);
+            return await executeClientFallback(action, payloadCopy);
         }
 
+        let data;
         try {
             data = JSON.parse(text);
         } catch(e) {
-            console.error("JSON Error:", e);
-            throw new Error("Error interno al decodificar la respuesta del servidor.");
+            console.warn("[GeminiService] Error decodificando JSON del backend. Intentando fallback cliente...", e);
+            return await executeClientFallback(action, payloadCopy);
         }
 
         if (!response.ok || data.error) {
+            // Si el backend da error por falta de API KEY en el servidor, usamos fallback de cliente si existe
+            if (data.error && (data.error.includes("API_KEY") || data.error.includes("clave"))) {
+                return await executeClientFallback(action, payloadCopy);
+            }
             throw new Error(data.error || "La API falló.");
         }
+
         return data.result;
-    } catch (error) {
-        console.error("Network or parsing error calling /api/gemini:", error);
-        throw error;
+    } catch (error: any) {
+        console.warn("[GeminiService] Error en llamada /api/gemini. Probando contingencia cliente directa:", error);
+        try {
+            return await executeClientFallback(action, payload);
+        } catch (fallbackError: any) {
+            throw new Error(fallbackError.message || error.message);
+        }
     }
 };
 

@@ -12,6 +12,7 @@ import {
   ImageIcon
 } from './IconComponents';
 import Button from './common/Button';
+import { GeminiKeyModal } from './GeminiKeyModal';
 import { useAuth } from '../contexts/AuthContext';
 
 interface HeaderProps {
@@ -77,6 +78,7 @@ const MobileNavButton: React.FC<{
 const Header: React.FC<HeaderProps> = ({ onNavigate, currentView, onShareClick }) => {
   const isSharedMode = window.location.hostname.includes('-pre-');
   const { logout, user, isAdmin, role } = useAuth();
+  const [isKeyModalOpen, setIsKeyModalOpen] = React.useState(false);
 
   return (
     <header className="bg-brand-primary sticky top-0 z-40 shadow-sm">
@@ -160,6 +162,16 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentView, onShareClick }
             </nav>
 
             <div className="w-px h-6 bg-brand-secondary/50 mx-1 hidden md:block"></div>
+
+            <button
+              type="button"
+              onClick={() => setIsKeyModalOpen(true)}
+              className="flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-secondary/80 hover:bg-brand-secondary text-brand-accent transition border border-brand-accent/30 mr-1 sm:mr-2"
+              title="Configurar Clave de IA (Google Gemini)"
+            >
+              <span className="mr-1">✨</span>
+              <span className="hidden sm:inline">Clave IA</span>
+            </button>
 
             <Button
               variant="secondary"
@@ -247,6 +259,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentView, onShareClick }
           )}
         </div>
       </nav>
+      <GeminiKeyModal isOpen={isKeyModalOpen} onClose={() => setIsKeyModalOpen(false)} />
     </header>
   );
 };
