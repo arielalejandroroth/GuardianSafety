@@ -3,4 +3,4 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
-require('./dist/server.cjs');
+require('./server.cjs');
