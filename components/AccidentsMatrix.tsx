@@ -192,9 +192,13 @@ const AccidentsMatrix: React.FC<AccidentsMatrixProps> = ({ accidents, onNavigate
           
           const updatedAccident = { ...accident, causeTreeAnalysis: result };
           dispatch({ type: ActionType.UPDATE_ACCIDENT, payload: updatedAccident });
-      } catch (error) {
+      } catch (error: any) {
           console.error("Error generating analysis:", error);
-          alert(error instanceof Error ? error.message : "Ocurrió un error desconocido al generar el análisis.");
+          const rawMsg = error instanceof Error ? error.message : "Error al generar el análisis.";
+          const friendlyMsg = rawMsg.includes("API") || rawMsg.includes("configurada")
+            ? "La función de análisis con Inteligencia Artificial requiere que el administrador configure la API_KEY en el servidor Hostinger."
+            : rawMsg;
+          alert(friendlyMsg);
           setSelectedAccident(null); // Close modal on error
       } finally {
           setIsAnalyzing(false);

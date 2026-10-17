@@ -10,6 +10,7 @@ import Button from './common/Button';
 import { DocumentAddIcon, ClipboardCheckIcon, AmbulanceIcon, UsersIcon, IdCardIcon, DocumentTextIcon, ExclamationTriangleIcon, ClockIcon, ClipboardDocumentListIcon, UserGroupIcon, ForkliftIcon, AiVisionIcon, ImageIcon } from './IconComponents';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import Card from './common/Card';
+import ApiDataStatusCard from './ApiDataStatusCard';
 
 interface DashboardProps {
   findings: Finding[];
@@ -234,10 +235,14 @@ const Dashboard: React.FC<DashboardProps> = ({ findings, dialogues, qualificatio
             </Card>
            </div>
         </div>
-        {/* Right Column: Quick Actions */}
+        {/* Right Column: Quick Actions & Server Status */}
         <div className="space-y-4">
             <h3 className="font-semibold text-lg text-slate-800">Acciones Rápidas</h3>
             {actions.map(action => <ActionButton key={action.label} {...action} onClick={() => onNavigate(action.view)} />)}
+            
+            <div className="pt-2">
+                <ApiDataStatusCard />
+            </div>
         </div>
       </div>
     </div>

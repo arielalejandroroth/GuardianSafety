@@ -12,9 +12,6 @@ import {
     ObservationFormState, 
     ForkliftChecklist 
 } from '../types';
-import { executeClientFallback, getGeminiApiKey, setGeminiApiKey } from './geminiClientFallback';
-
-export { getGeminiApiKey, setGeminiApiKey };
 
 interface AppData {
     findings: Finding[];
@@ -26,9 +23,10 @@ interface AppData {
 }
 
 const callApi = async (action: string, payload: any) => {
-    // Si ya hay una clave Gemini configurada en el cliente y estamos en un hosting estático o falla el servidor,
-    // usamos la ejecución de contingencia directa.
-    const localKey = getGeminiApiKey();
+    // Verificación de conectividad del dispositivo
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error("El dispositivo no tiene conexión a internet. Verifique su red e intente nuevamente.");
+    }
 
     try {
         const payloadCopy = JSON.parse(JSON.stringify(payload));
@@ -64,9 +62,7 @@ const callApi = async (action: string, payload: any) => {
                     });
                     
                     if (!uploadRes.ok) {
-                        const errText = await uploadRes.text();
-                        console.error("Chunk upload failed:", errText);
-                        throw new Error("Fallo al subir archivo. El servidor rechazó la conexión parcial: " + uploadRes.status);
+                        throw new Error("Fallo al subir el archivo al servidor. Intente nuevamente.");
                     }
                     
                     if (c === totalChunks - 1) {
@@ -82,44 +78,35 @@ const callApi = async (action: string, payload: any) => {
 
         const response = await fetch("/api/gemini", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
             body: JSON.stringify({ action, payload: payloadCopy })
         });
         
         const contentType = response.headers.get("content-type") || "";
         const text = await response.text();
 
-        // Si el servidor devolvió HTML (típico de Hostinger cuando no hay proceso Node.js y Apache sirve index.html)
-        // o si dio 404 / 502 / 503, activamos el fallback directo de Gemini del cliente.
-        if (!contentType.includes("application/json") || response.status === 404 || response.status === 502) {
-            console.warn(`[GeminiService] Servidor respondió con ${response.status} (${contentType || 'sin content-type'}). Activando fallback cliente...`);
-            return await executeClientFallback(action, payloadCopy);
+        if (!contentType.includes("application/json")) {
+            throw new Error("El servidor devolvió una respuesta no válida. Verifique que la aplicación Node.js esté activa.");
         }
 
-        let data;
+        let data: any;
         try {
             data = JSON.parse(text);
-        } catch(e) {
-            console.warn("[GeminiService] Error decodificando JSON del backend. Intentando fallback cliente...", e);
-            return await executeClientFallback(action, payloadCopy);
+        } catch {
+            throw new Error("No se pudo procesar la respuesta del servidor.");
         }
 
         if (!response.ok || data.error) {
-            // Si el backend da error por falta de API KEY en el servidor, usamos fallback de cliente si existe
-            if (data.error && (data.error.includes("API_KEY") || data.error.includes("clave"))) {
-                return await executeClientFallback(action, payloadCopy);
-            }
-            throw new Error(data.error || "La API falló.");
+            throw new Error(data.error || "No se pudo completar la operación en el servidor.");
         }
 
         return data.result;
     } catch (error: any) {
-        console.warn("[GeminiService] Error en llamada /api/gemini. Probando contingencia cliente directa:", error);
-        try {
-            return await executeClientFallback(action, payload);
-        } catch (fallbackError: any) {
-            throw new Error(fallbackError.message || error.message);
-        }
+        console.error(`[GeminiService] Error en acción ${action}:`, error.message);
+        throw new Error(error.message || "Error de comunicación con el servidor. Intente nuevamente.");
     }
 };
 

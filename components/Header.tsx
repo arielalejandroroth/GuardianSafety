@@ -12,7 +12,8 @@ import {
   ImageIcon
 } from './IconComponents';
 import Button from './common/Button';
-import { GeminiKeyModal } from './GeminiKeyModal';
+import Modal from './common/Modal';
+import ApiDataStatusCard from './ApiDataStatusCard';
 import { useAuth } from '../contexts/AuthContext';
 
 interface HeaderProps {
@@ -78,7 +79,7 @@ const MobileNavButton: React.FC<{
 const Header: React.FC<HeaderProps> = ({ onNavigate, currentView, onShareClick }) => {
   const isSharedMode = window.location.hostname.includes('-pre-');
   const { logout, user, isAdmin, role } = useAuth();
-  const [isKeyModalOpen, setIsKeyModalOpen] = React.useState(false);
+  const [isStatusModalOpen, setIsStatusModalOpen] = React.useState(false);
 
   return (
     <header className="bg-brand-primary sticky top-0 z-40 shadow-sm">
@@ -165,12 +166,12 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentView, onShareClick }
 
             <button
               type="button"
-              onClick={() => setIsKeyModalOpen(true)}
+              onClick={() => setIsStatusModalOpen(true)}
               className="flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-secondary/80 hover:bg-brand-secondary text-brand-accent transition border border-brand-accent/30 mr-1 sm:mr-2"
-              title="Configurar Clave de IA (Google Gemini)"
+              title="Estado del Servidor y API (/api/estado)"
             >
-              <span className="mr-1">✨</span>
-              <span className="hidden sm:inline">Clave IA</span>
+              <span className="mr-1">⚡</span>
+              <span className="hidden sm:inline">Servidor</span>
             </button>
 
             <Button
@@ -259,7 +260,15 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentView, onShareClick }
           )}
         </div>
       </nav>
-      <GeminiKeyModal isOpen={isKeyModalOpen} onClose={() => setIsKeyModalOpen(false)} />
+      {isStatusModalOpen && (
+        <Modal
+          isOpen={isStatusModalOpen}
+          onClose={() => setIsStatusModalOpen(false)}
+          title="Estado del Sistema"
+        >
+          <ApiDataStatusCard onClose={() => setIsStatusModalOpen(false)} />
+        </Modal>
+      )}
     </header>
   );
 };
