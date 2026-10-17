@@ -1,2 +1,2 @@
-process.env.NODE_ENV = 'production';
-import('./dist/server.cjs');
+// Archivo alternativo de entrada para Node.js en Hostinger
+import './server.js';

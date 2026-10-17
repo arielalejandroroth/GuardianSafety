@@ -271,7 +271,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else if (!process.env.VERCEL) {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = (typeof __dirname !== 'undefined' && fs.existsSync(path.join(__dirname, 'index.html')))
+      ? __dirname
+      : path.join(process.cwd(), 'dist');
+    
     app.use(express.static(distPath));
     
     // Fallback SPA para servir index.html
@@ -299,16 +302,9 @@ async function startServer() {
   }
 }
 
-// Iniciar servidor si es el script principal
-const isCjsMain = typeof require !== 'undefined' && require.main === module;
-const isEsmMain = typeof process !== 'undefined' && process.argv && process.argv[1] && typeof import.meta !== 'undefined' && import.meta.url === `file://${process.argv[1]}`;
-
-if (
-  isCjsMain || 
-  isEsmMain ||
-  (typeof process !== 'undefined' && process.argv && process.argv[1]?.endsWith('server.cjs'))
-) {
-  startServer();
-} else if (process.env.NODE_ENV === "production" && !process.env.VERCEL) {
-  startServer();
+// Iniciar servidor automáticamente salvo en entornos serverless (Vercel)
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error("[Backend] Error fatal al iniciar servidor:", err);
+  });
 }
